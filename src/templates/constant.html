@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}{{ resource.name }} - Constant - CODATA{% endblock %}
+
+{% block content %}
+<article typeof="schema:Thing">
+    <h2 property="schema:name">{{ resource.name }}</h2>
+    <p class="uri" property="@id">{{ resource.uri }}</p>
+    
+    <div class="metadata">
+        <dl>
+            <dt>ID:</dt>
+            <dd><code>{{ resource.id }}</code></dd>
+            
+            {% if resource.value %}
+            <dt>Value:</dt>
+            <dd property="schema:value"><code>{{ resource.value.value }}</code></dd>
+            
+            <dt>Uncertainty:</dt>
+            <dd><code>{{ resource.value.uncertainty }}</code></dd>
+            
+            <dt>Version:</dt>
+            <dd><code>{{ resource.value.versionId }}</code></dd>
+            
+            {% if resource.value.isExact %}
+            <dt>Exact:</dt>
+            <dd><span class="badge">Exact Value</span></dd>
+            {% endif %}
+            {% endif %}
+            
+            {% if resource.unit %}
+            <dt>Unit:</dt>
+            <dd><a href="{{ root_path }}/units/{{ resource.unit.id }}">{{ resource.unit.name }}</a></dd>
+            {% endif %}
+            
+            {% if resource.quantity %}
+            <dt>Quantity:</dt>
+            <dd><a href="{{ root_path }}/quantities/{{ resource.quantity.id }}">{{ resource.quantity.name }}</a></dd>
+            {% endif %}
+            
+            {% if resource.identifiers %}
+            <dt>Identifiers:</dt>
+            <dd>
+                <ul class="list">
+                {% for identifier in resource.identifiers %}
+                    <li>
+                        <strong>{{ identifier.id }}:</strong> 
+                        {% if identifier.url %}
+                        <a href="{{ identifier.url }}" target="_blank">{{ identifier.value }}</a>
+                        {% else %}
+                        {{ identifier.value }}
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            </dd>
+            {% endif %}
+        </dl>
+    </div>
+    
+    {% if resource.historicalValues %}
+    <h3>Historical Values</h3>
+    <div class="metadata">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f8f9fa;">
+                    <th style="padding: 0.5rem; text-align: left;">Version</th>
+                    <th style="padding: 0.5rem; text-align: right;">Value</th>
+                    <th style="padding: 0.5rem; text-align: right;">Uncertainty</th>
+                    <th style="padding: 0.5rem; text-align: center;">Exact</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for value in resource.historicalValues %}
+                <tr style="border-top: 1px solid #dee2e6;">
+                    <td style="padding: 0.5rem;">{{ value.versionId }}</td>
+                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;">{{ value.value }}</td>
+                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;">{{ value.uncertainty }}</td>
+                    <td style="padding: 0.5rem; text-align: center;">
+                        {% if value.isExact %}✓{% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</article>
+{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{{ json_ld | safe }}
+</script>
+{% endblock %}

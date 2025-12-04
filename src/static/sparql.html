@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPARQL Query Interface - CODATA API</title>
+    <link rel="icon" type="image/svg+xml" href="/playground/vite.svg">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --error: #ef4444;
+            --code-bg: #1e293b;
+            --code-text: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 30px 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            opacity: 0.9;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            color: var(--primary);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 300px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            background: var(--code-bg);
+            color: var(--code-text);
+            resize: vertical;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e1;
+        }
+
+        .examples {
+            display: grid;
+            gap: 10px;
+        }
+
+        .example-btn {
+            text-align: left;
+            padding: 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .example-btn:hover {
+            background: white;
+            border-color: var(--primary);
+        }
+
+        .example-btn strong {
+            display: block;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .example-btn span {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .results-area {
+            margin-top: 20px;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .results-header h3 {
+            font-size: 1rem;
+            color: var(--text);
+        }
+
+        .result-info {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        pre {
+            background: var(--code-bg);
+            color: var(--code-text);
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 13px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .error {
+            background: #fef2f2;
+            color: var(--error);
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid var(--error);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            background: white;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg);
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        td {
+            font-size: 0.9rem;
+        }
+
+        .info-box {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-box h3 {
+            color: var(--primary);
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+            color: var(--text-muted);
+        }
+
+        .info-box code {
+            background: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/playground/" class="back-link">← Back to Playground</a>
+        
+        <header>
+            <h1>SPARQL Query Interface</h1>
+            <p>Query the CODATA RDF knowledge graph directly using SPARQL</p>
+        </header>
+
+        <div class="info-box">
+            <h3>Available Prefixes</h3>
+            <ul>
+                <li><code>codata:</code> &lt;https://w3id.org/codata/model/&gt;</li>
+                <li><code>concept:</code> &lt;https://w3id.org/codata/concepts/&gt;</li>
+                <li><code>constant:</code> &lt;https://w3id.org/codata/constants/&gt;</li>
+                <li><code>quantity:</code> &lt;https://w3id.org/codata/quantities/&gt;</li>
+                <li><code>unit:</code> &lt;https://w3id.org/codata/units/&gt;</li>
+                <li><code>skos:</code> &lt;http://www.w3.org/2004/02/skos/core#&gt;</li>
+                <li><code>schema:</code> &lt;https://schema.org/&gt;</li>
+            </ul>
+        </div>
+
+        <div class="layout">
+            <div class="card">
+                <h2>SPARQL Query</h2>
+                <textarea id="query" placeholder="Enter your SPARQL query here...">SELECT ?constant ?label ?value
+WHERE {
+  ?constant a codata:Constant ;
+           skos:prefLabel ?label ;
+           codata:hasValue ?valueUri .
+  ?valueUri codata:value ?value .
+}
+LIMIT 10</textarea>
+                <div class="button-group">
+                    <button class="btn-primary" onclick="executeQuery()">▶ Execute Query</button>
+                    <button class="btn-secondary" onclick="clearQuery()">Clear</button>
+                    <button class="btn-secondary" onclick="formatQuery()">Format</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Example Queries</h2>
+                <div class="examples">
+                    <button class="example-btn" onclick="loadExample(1)">
+                        <strong>List All Constants</strong>
+                        <span>Get all fundamental constants with their names</span>
+                    </button>
+                    <button class="example-btn" onclick="loadExample(2)">
+                        <strong>Constants with Values</strong>
+                        <span>Retrieve constants with their numerical values and units</span>
+                    </button>
+                    <button class="example-btn" onclick="loadExample(3)">
+                        <strong>Constants by Quantity</strong>
+                        <span>Find all constants for a specific quantity</span>
+                    </button>
+                    <button class="example-btn" onclick="loadExample(4)">
+                        <strong>Units Used</strong>
+                        <span>List all units used in the database</span>
+                    </button>
+                    <button class="example-btn" onclick="loadExample(5)">
+                        <strong>CODATA Versions</strong>
+                        <span>Get all CODATA release versions</span>
+                    </button>
+                    <button class="example-btn" onclick="loadExample(6)">
+                        <strong>Constant Details</strong>
+                        <span>Detailed information for a specific constant</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="results-header">
+                <h2>Results</h2>
+                <span class="result-info" id="resultInfo"></span>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Executing query...</p>
+            </div>
+            
+            <div id="results">
+                <p style="color: var(--text-muted); text-align: center; padding: 40px;">
+                    Execute a query to see results here
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const examples = {
+            1: `SELECT ?constant ?label
+WHERE {
+  ?constant a codata:Constant ;
+           skos:prefLabel ?label .
+}
+ORDER BY ?label
+LIMIT 20`,
+            2: `SELECT ?constant ?label ?value ?uncertainty ?unit
+WHERE {
+  ?constant a codata:Constant ;
+           skos:prefLabel ?label ;
+           codata:hasValue ?valueUri .
+  ?valueUri codata:value ?value .
+  OPTIONAL { ?valueUri codata:uncertainty ?uncertainty }
+  OPTIONAL { 
+    ?constant codata:hasUnit ?unitUri .
+    ?unitUri schema:identifier ?unit .
+  }
+}
+LIMIT 20`,
+            3: `SELECT ?constant ?label ?quantity ?quantityLabel
+WHERE {
+  ?constant a codata:Constant ;
+           skos:prefLabel ?label ;
+           codata:hasQuantity ?quantity .
+  ?quantity skos:prefLabel ?quantityLabel .
+}
+ORDER BY ?quantityLabel
+LIMIT 20`,
+            4: `SELECT DISTINCT ?unit ?unitLabel
+WHERE {
+  ?constant codata:hasUnit ?unit .
+  ?unit schema:identifier ?unitLabel .
+}
+ORDER BY ?unitLabel`,
+            5: `SELECT ?version ?published
+WHERE {
+  ?version a codata:Version .
+  OPTIONAL { ?version schema:datePublished ?published }
+}
+ORDER BY DESC(?version)`,
+            6: `SELECT ?property ?value
+WHERE {
+  constant:speed-of-light-in-vacuum ?property ?value .
+}
+LIMIT 50`
+        };
+
+        function loadExample(num) {
+            document.getElementById('query').value = examples[num];
+        }
+
+        function clearQuery() {
+            document.getElementById('query').value = '';
+            document.getElementById('results').innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 40px;">Execute a query to see results here</p>';
+            document.getElementById('resultInfo').textContent = '';
+        }
+
+        function formatQuery() {
+            const textarea = document.getElementById('query');
+            let query = textarea.value;
+            
+            // Basic formatting
+            query = query.replace(/\s+/g, ' ').trim();
+            query = query.replace(/\s*{\s*/g, ' {\n  ');
+            query = query.replace(/\s*}\s*/g, '\n}');
+            query = query.replace(/\s*\.\s*/g, ' .\n  ');
+            query = query.replace(/WHERE/g, '\nWHERE');
+            query = query.replace(/ORDER BY/g, '\nORDER BY');
+            query = query.replace(/LIMIT/g, '\nLIMIT');
+            query = query.replace(/OPTIONAL/g, '\n  OPTIONAL');
+            
+            textarea.value = query;
+        }
+
+        async function executeQuery() {
+            const query = document.getElementById('query').value.trim();
+            
+            if (!query) {
+                alert('Please enter a SPARQL query');
+                return;
+            }
+
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const resultInfo = document.getElementById('resultInfo');
+            
+            loading.classList.add('active');
+            results.innerHTML = '';
+            resultInfo.textContent = '';
+
+            try {
+                const rootPath = window.location.pathname.includes('/playground') 
+                    ? window.location.pathname.split('/playground')[0] 
+                    : '';
+                
+                const response = await fetch(`${rootPath}/sparql?query=${encodeURIComponent(query)}`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/sparql-results+json'
+                    }
+                });
+
+                loading.classList.remove('active');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const contentType = response.headers.get('content-type');
+                
+                if (contentType.includes('application/sparql-results+json')) {
+                    const data = await response.json();
+                    displayTableResults(data);
+                } else {
+                    // Handle other formats (CONSTRUCT/DESCRIBE queries)
+                    const text = await response.text();
+                    displayRawResults(text);
+                }
+
+            } catch (error) {
+                loading.classList.remove('active');
+                results.innerHTML = `<div class="error">
+                    <strong>Error:</strong> ${error.message}
+                </div>`;
+            }
+        }
+
+        function displayTableResults(data) {
+            const results = document.getElementById('results');
+            const resultInfo = document.getElementById('resultInfo');
+            
+            if (!data.results || !data.results.bindings || data.results.bindings.length === 0) {
+                results.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 40px;">No results found</p>';
+                resultInfo.textContent = '0 results';
+                return;
+            }
+
+            const bindings = data.results.bindings;
+            const vars = data.head.vars;
+            
+            resultInfo.textContent = `${bindings.length} result${bindings.length !== 1 ? 's' : ''}`;
+
+            let html = '<table><thead><tr>';
+            vars.forEach(v => {
+                html += `<th>${v}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            bindings.forEach(binding => {
+                html += '<tr>';
+                vars.forEach(v => {
+                    const value = binding[v];
+                    if (value) {
+                        if (value.type === 'uri') {
+                            html += `<td><a href="${value.value}" target="_blank" style="color: var(--primary); word-break: break-all;">${value.value}</a></td>`;
+                        } else {
+                            html += `<td>${value.value}</td>`;
+                        }
+                    } else {
+                        html += '<td style="color: var(--text-muted);">-</td>';
+                    }
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            results.innerHTML = html;
+        }
+
+        function displayRawResults(text) {
+            const results = document.getElementById('results');
+            const resultInfo = document.getElementById('resultInfo');
+            
+            resultInfo.textContent = 'Graph result';
+            results.innerHTML = `<pre>${escapeHtml(text)}</pre>`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Handle Enter key with Ctrl/Cmd
+        document.getElementById('query').addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                executeQuery();
+            }
+        });
+    </script>
+</body>
+</html>

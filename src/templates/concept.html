@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}{{ resource.name }} - Concept - CODATA{% endblock %}
+
+{% block content %}
+<article typeof="skos:Concept">
+    <h2 property="skos:prefLabel">{{ resource.name }}</h2>
+    <p class="uri" property="@id">{{ resource.uri }}</p>
+    
+    <div class="metadata">
+        <dl>
+            <dt>ID:</dt>
+            <dd><code>{{ resource.id }}</code></dd>
+            
+            {% if resource.broader %}
+            <dt>Broader Concepts:</dt>
+            <dd>
+                <ul class="list">
+                {% for broader in resource.broader %}
+                    <li><a href="{{ root_path }}/concepts/{{ broader.id }}" property="skos:broader">{{ broader.name }}</a></li>
+                {% endfor %}
+                </ul>
+            </dd>
+            {% endif %}
+            
+            {% if resource.parts %}
+            <dt>Has Parts:</dt>
+            <dd>
+                <ul class="list">
+                {% for part in resource.parts %}
+                    <li><a href="{{ root_path }}/concepts/{{ part.id }}" property="dcterms:hasPart">{{ part.name }}</a></li>
+                {% endfor %}
+                </ul>
+            </dd>
+            {% endif %}
+        </dl>
+    </div>
+</article>
+{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{{ json_ld | safe }}
+</script>
+{% endblock %}

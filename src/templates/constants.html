@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Constants - CODATA{% endblock %}
+
+{% block format_links %}{% endblock %}
+
+{% block content %}
+<article>
+    <h2>Fundamental Physical Constants</h2>
+    <p>Browse all fundamental physical constants in the CODATA repository.</p>
+    
+    <div class="metadata">
+        <p><strong>Total Constants:</strong> <span class="badge">{{ resources|length }}</span></p>
+    </div>
+    
+    <table style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
+        <thead>
+            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Name</th>
+                <th style="padding: 0.75rem; text-align: right; font-weight: 600;">Value</th>
+                <th style="padding: 0.75rem; text-align: right; font-weight: 600;">Uncertainty</th>
+                <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Unit</th>
+                <th style="padding: 0.75rem; text-align: right; font-weight: 600;">Year</th>
+                <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Quantity</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for constant in resources %}
+            <tr style="border-bottom: 1px solid #e9ecef;">
+                <td style="padding: 0.75rem;">
+                    <a href="{{ root_path }}/constants/{{ constant.id }}">{{ constant.name }}</a>
+                </td>
+                <td style="padding: 0.75rem; text-align: right; font-family: monospace;">
+                    {% if constant.value %}{{ constant.value.value }}{% else %}-{% endif %}
+                </td>
+                <td style="padding: 0.75rem; text-align: right; font-family: monospace;">
+                    {% if constant.value %}{{ constant.value.uncertainty }}{% else %}-{% endif %}
+                </td>
+                <td style="padding: 0.75rem;">
+                    {% if constant.unit %}
+                    <a href="{{ root_path }}/units/{{ constant.unit.id }}">{{ constant.unit.name }}</a>
+                    {% else %}-{% endif %}
+                </td>
+                <td style="padding: 0.75rem; text-align: right; font-family: monospace;">
+                    {% if constant.value %}{{ constant.value.versionId }}{% else %}-{% endif %}
+                </td>
+                <td style="padding: 0.75rem;">
+                    {% if constant.quantity %}
+                    <a href="{{ root_path }}/quantities/{{ constant.quantity.id }}">{{ constant.quantity.name }}</a>
+                    {% else %}-{% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</article>
+{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{{ json_ld | safe }}
+</script>
+{% endblock %}

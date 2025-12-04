@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Version {{ resource.id }} - CODATA{% endblock %}
+
+{% block content %}
+<article typeof="schema:Thing">
+    <h2>CODATA Version <span property="schema:identifier">{{ resource.id }}</span></h2>
+    <p class="uri" property="@id">{{ resource.uri }}</p>
+    
+    <div class="metadata">
+        <dl>
+            <dt>ID:</dt>
+            <dd><code>{{ resource.id }}</code></dd>
+            
+            {% if resource.published %}
+            <dt>Published:</dt>
+            <dd property="dcterms:issued">{{ resource.published }}</dd>
+            {% endif %}
+            
+            {% if resource.constants %}
+            <dt>Constants:</dt>
+            <dd>
+                <span class="badge">{{ resource.constants|length }} constant(s)</span>
+                <ul class="list">
+                {% for constant in resource.constants %}
+                    <li><a href="{{ root_path }}/constants/{{ constant.id }}">{{ constant.name }}</a></li>
+                {% endfor %}
+                </ul>
+            </dd>
+            {% endif %}
+        </dl>
+    </div>
+</article>
+{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{{ json_ld | safe }}
+</script>
+{% endblock %}

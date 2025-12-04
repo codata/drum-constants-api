@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}{{ resource.name }} - Quantity - CODATA{% endblock %}
+
+{% block content %}
+<article typeof="schema:QuantitativeValue">
+    <h2 property="schema:name">{{ resource.name }}</h2>
+    <p class="uri" property="@id">{{ resource.uri }}</p>
+    
+    <div class="metadata">
+        <dl>
+            <dt>ID:</dt>
+            <dd><code>{{ resource.id }}</code></dd>
+            
+            {% if resource.constants %}
+            <dt>Related Constants:</dt>
+            <dd>
+                <span class="badge">{{ resource.constants|length }} constant(s)</span>
+                <ul class="list">
+                {% for constant in resource.constants %}
+                    <li><a href="{{ root_path }}/constants/{{ constant.id }}">{{ constant.name }}</a></li>
+                {% endfor %}
+                </ul>
+            </dd>
+            {% endif %}
+        </dl>
+    </div>
+</article>
+{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{{ json_ld | safe }}
+</script>
+{% endblock %}

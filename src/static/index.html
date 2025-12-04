@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CODATA Fundamental Constants API</title>
+    <link rel="icon" type="image/svg+xml" href="/playground/vite.svg">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 30px 20px;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 900px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .sidebar {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            height: fit-content;
+            position: sticky;
+            top: 20px;
+        }
+
+        .sidebar h2 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        .nav-list {
+            list-style: none;
+        }
+
+        .nav-item {
+            margin-bottom: 8px;
+        }
+
+        .nav-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px 16px;
+            border: none;
+            background: transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: var(--text);
+            transition: all 0.2s;
+            text-align: left;
+            text-decoration: none;
+        }
+
+        .nav-btn:hover {
+            background: var(--bg);
+        }
+
+        .nav-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .nav-btn .icon {
+            font-size: 1.2rem;
+        }
+
+        .nav-btn .count {
+            margin-left: auto;
+            background: var(--bg);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .nav-btn.active .count {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        .main-content {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .content-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .content-header h2 {
+            font-size: 1.25rem;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg);
+            padding: 8px 16px;
+            border-radius: 8px;
+            flex: 1;
+            max-width: 400px;
+        }
+
+        .search-box input {
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 0.95rem;
+            width: 100%;
+        }
+
+        .content-body {
+            padding: 0;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .list-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .list-table th {
+            text-align: left;
+            padding: 12px 24px;
+            background: var(--bg);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            position: sticky;
+            top: 0;
+        }
+
+        .list-table td {
+            padding: 14px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .list-table tr:hover {
+            background: var(--bg);
+        }
+
+        .list-table tr {
+            cursor: pointer;
+        }
+
+        .list-table code {
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.85rem;
+            background: var(--bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--primary);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge-quantity {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .badge-concept {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-unit {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-version {
+            background: #f3e8ff;
+            color: #7c3aed;
+        }
+
+        /* Detail Panel */
+        .detail-panel {
+            display: none;
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 500px;
+            max-width: 100%;
+            height: 100vh;
+            background: var(--card-bg);
+            box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .detail-panel.open {
+            display: block;
+        }
+
+        .detail-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: var(--card-bg);
+        }
+
+        .detail-header h3 {
+            font-size: 1.1rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 4px 8px;
+        }
+
+        .close-btn:hover {
+            color: var(--text);
+        }
+
+        .detail-body {
+            padding: 24px;
+        }
+
+        .detail-section {
+            margin-bottom: 24px;
+        }
+
+        .detail-section h4 {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .detail-value {
+            font-size: 1rem;
+            word-break: break-all;
+        }
+
+        .detail-value a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .detail-value a:hover {
+            text-decoration: underline;
+        }
+
+        .value-card {
+            background: var(--bg);
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .value-card .number {
+            font-size: 1.25rem;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            color: var(--primary);
+        }
+
+        .value-card .uncertainty {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .value-card .unit {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .related-list {
+            list-style: none;
+        }
+
+        .related-list li {
+            padding: 8px 12px;
+            background: var(--bg);
+            border-radius: 6px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .related-list li:hover {
+            background: var(--border);
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.3);
+            z-index: 999;
+        }
+
+        .overlay.open {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+
+        .id-cell {
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: var(--primary);
+        }
+
+        .identifier-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .identifier-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            background: var(--bg);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            text-decoration: none;
+            color: var(--text);
+        }
+
+        .identifier-badge:hover {
+            background: var(--border);
+        }
+
+        .identifier-badge .source {
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>🔬 CODATA Fundamental Physical Constants</h1>
+            <p>Explore the CODATA internationally recommended values of fundamental physical constants</p>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="layout">
+            <aside class="sidebar">
+                <h2>Resources</h2>
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <button class="nav-btn active" data-resource="constants">
+                            <span class="icon">⚛️</span>
+                            <span>Constants</span>
+                            <span class="count" id="count-constants">-</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-btn" data-resource="quantities">
+                            <span class="icon">📐</span>
+                            <span>Quantities</span>
+                            <span class="count" id="count-quantities">-</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-btn" data-resource="concepts">
+                            <span class="icon">💡</span>
+                            <span>Concepts</span>
+                            <span class="count" id="count-concepts">-</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-btn" data-resource="units">
+                            <span class="icon">📏</span>
+                            <span>Units</span>
+                            <span class="count" id="count-units">-</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-btn" data-resource="versions">
+                            <span class="icon">📅</span>
+                            <span>Versions</span>
+                            <span class="count" id="count-versions">-</span>
+                        </button>
+                    </li>
+                </ul>
+
+                <h2 style="margin-top: 24px;">Quick Links</h2>
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="/docs" class="nav-btn" target="_blank">
+                            <span class="icon">📚</span>
+                            <span>API Docs</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/playground/sparql" class="nav-btn" target="_blank">
+                            <span class="icon">🔍</span>
+                            <span>SPARQL</span>
+                        </a>
+                    </li>
+                </ul>
+            </aside>
+
+            <main class="main-content">
+                <div class="content-header">
+                    <h2 id="content-title">Constants</h2>
+                    <div class="search-box">
+                        <span>🔍</span>
+                        <input type="text" id="search-input" placeholder="Search...">
+                    </div>
+                </div>
+                <div class="content-body" id="content-body">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading...</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Detail Panel -->
+    <div class="overlay" id="overlay"></div>
+    <div class="detail-panel" id="detail-panel">
+        <div class="detail-header">
+            <h3 id="detail-title">Details</h3>
+            <button class="close-btn" id="close-detail">&times;</button>
+        </div>
+        <div class="detail-body" id="detail-body">
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        let currentResource = 'constants';
+        let currentData = [];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCounts();
+            loadResource('constants');
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Navigation
+            document.querySelectorAll('.nav-btn[data-resource]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const resource = btn.dataset.resource;
+                    loadResource(resource);
+                });
+            });
+
+            // Search
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                filterData(e.target.value);
+            });
+
+            // Close detail panel
+            document.getElementById('close-detail').addEventListener('click', closeDetail);
+            document.getElementById('overlay').addEventListener('click', closeDetail);
+        }
+
+        async function loadCounts() {
+            const resources = ['constants', 'quantities', 'concepts', 'units', 'versions'];
+            for (const resource of resources) {
+                try {
+                    const response = await fetch(`${API_BASE}/${resource}`);
+                    const data = await response.json();
+                    document.getElementById(`count-${resource}`).textContent = data.length;
+                } catch (e) {
+                    document.getElementById(`count-${resource}`).textContent = '?';
+                }
+            }
+        }
+
+        async function loadResource(resource) {
+            currentResource = resource;
+            document.getElementById('content-title').textContent = capitalize(resource);
+            document.getElementById('search-input').value = '';
+            document.getElementById('content-body').innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading ${resource}...</p>
+                </div>
+            `;
+
+            try {
+                const response = await fetch(`${API_BASE}/${resource}`);
+                currentData = await response.json();
+                renderList(currentData);
+            } catch (e) {
+                document.getElementById('content-body').innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">❌</div>
+                        <p>Failed to load ${resource}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function filterData(query) {
+            const filtered = currentData.filter(item => {
+                const name = (item.name || item.id || '').toLowerCase();
+                const id = (item.id || '').toLowerCase();
+                return name.includes(query.toLowerCase()) || id.includes(query.toLowerCase());
+            });
+            renderList(filtered);
+        }
+
+        function renderList(data) {
+            if (data.length === 0) {
+                document.getElementById('content-body').innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📭</div>
+                        <p>No items found</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<table class="list-table"><thead><tr>';
+            
+            // Headers based on resource type
+            if (currentResource === 'constants') {
+                html += '<th>Name</th><th>Value</th><th>Uncertainty</th><th>Unit</th><th>Quantity</th>';
+            } else if (currentResource === 'quantities') {
+                html += '<th>Name</th><th>Count</th><th>Constants</th>';
+            } else if (currentResource === 'concepts') {
+                html += '<th>ID</th><th>Name</th><th>Type</th>';
+            } else if (currentResource === 'units') {
+                html += '<th>ID</th><th>Name</th>';
+            } else if (currentResource === 'versions') {
+                html += '<th>ID</th><th>Name</th><th>Published</th>';
+            }
+            
+            html += '</tr></thead><tbody>';
+
+            for (const item of data) {
+                html += `<tr onclick="loadDetail('${currentResource}', '${item.id}')">`;
+                
+                if (currentResource === 'constants') {
+                    html += `<td>${item.name || '-'}</td>`;
+                    html += `<td><code>${item.value?.value || '-'}</code></td>`;
+                    html += `<td><code>${item.value?.uncertainty || '-'}</code></td>`;
+                    html += `<td>${item.unit?.name || item.unit?.id || '-'}</td>`;
+                    html += `<td>${item.quantity?.name || '-'}</td>`;
+                } else if (currentResource === 'quantities') {
+                    html += `<td>${item.name || '-'}</td>`;
+                    const constantsCount = item.constants?.length || 0;
+                    html += `<td>${constantsCount}</td>`;
+                    const constantsList = item.constants?.map(c => c.name).join(', ') || '-';
+                    html += `<td>${constantsList}</td>`;
+                } else if (currentResource === 'concepts') {
+                    html += `<td class="id-cell">${item.id}</td>`;
+                    html += `<td>${item.name || '-'}</td>`;
+                    html += `<td><span class="badge ${item.isQuantity ? 'badge-quantity' : 'badge-concept'}">${item.isQuantity ? 'Quantity' : 'Concept'}</span></td>`;
+                } else if (currentResource === 'units') {
+                    html += `<td class="id-cell">${item.id}</td>`;
+                    html += `<td>${item.name || '-'}</td>`;
+                } else if (currentResource === 'versions') {
+                    html += `<td class="id-cell">${item.id}</td>`;
+                    html += `<td>${item.name || '-'}</td>`;
+                    html += `<td>${item.published || '-'}</td>`;
+                }
+                
+                html += '</tr>';
+            }
+
+            html += '</tbody></table>';
+            document.getElementById('content-body').innerHTML = html;
+        }
+
+        async function loadDetail(resource, id) {
+            document.getElementById('detail-title').textContent = 'Loading...';
+            document.getElementById('detail-body').innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                </div>
+            `;
+            openDetail();
+
+            try {
+                const response = await fetch(`${API_BASE}/${resource}/${id}`);
+                const item = await response.json();
+                renderDetail(resource, item);
+            } catch (e) {
+                document.getElementById('detail-body').innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">❌</div>
+                        <p>Failed to load details</p>
+                    </div>
+                `;
+            }
+        }A
+
+        function renderDetail(resource, item) {
+            document.getElementById('detail-title').textContent = item.name || item.id;
+            
+            let html = '';
+
+            // Common fields
+            html += `
+                <div class="detail-section">
+                    <h4>ID</h4>
+                    <div class="detail-value id-cell">${item.id}</div>
+                </div>
+            `;
+
+            if (item.uri) {
+                html += `
+                    <div class="detail-section">
+                        <h4>URI</h4>
+                        <div class="detail-value"><a href="${item.uri}" target="_blank">${item.uri}</a></div>
+                    </div>
+                `;
+            }
+
+            // Resource-specific fields
+            if (resource === 'constants') {
+                if (item.quantity) {
+                    html += `
+                        <div class="detail-section">
+                            <h4>Quantity</h4>
+                            <div class="detail-value">
+                                <ul class="related-list"><li onclick="loadDetail('quantities', '${item.quantity.id}')">${item.quantity.name || item.quantity.id}</li></ul>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (item.unit) {
+                    html += `
+                        <div class="detail-section">
+                            <h4>Unit</h4>
+                            <ul class="related-list">
+                                <li onclick="loadDetail('units', '${item.unit.id}')">${item.unit.name || item.unit.id}</li>
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                // Current value
+                if (item.value) {
+                    html += `<div class="detail-section"><h4>Current Value (${item.value.version?.id || item.value.versionId || 'Latest'})</h4>`;
+                    html += `
+                        <div class="value-card">
+                            <div class="number">${item.value.value}</div>
+                            ${item.value.uncertainty ? `<div class="uncertainty">Uncertainty: ± ${item.value.uncertainty}</div>` : ''}
+                            ${item.value.isExact ? `<div class="unit">Exact value</div>` : ''}
+                        </div>
+                    `;
+                    html += `</div>`;
+                }
+
+                // Historical values
+                if (item.historicalValues && item.historicalValues.length > 0) {
+                    html += `<div class="detail-section"><h4>Historical Values (${item.historicalValues.length})</h4>`;
+                    for (const val of item.historicalValues) {
+                        html += `
+                            <div class="value-card">
+                                <div class="unit" style="margin-bottom: 8px; font-weight: 600;">Version ${val.version?.id || val.versionId}</div>
+                                <div class="number">${val.value}</div>
+                                ${val.uncertainty ? `<div class="uncertainty">Uncertainty: ± ${val.uncertainty}</div>` : ''}
+                                ${val.isExact ? `<div class="unit">Exact value</div>` : ''}
+                            </div>
+                        `;
+                    }
+                    html += `</div>`;
+                }
+            }
+
+            if (resource === 'quantities') {
+                if (item.concept) {
+                    html += `
+                        <div class="detail-section">
+                            <h4>Concept</h4>
+                            <ul class="related-list">
+                                <li onclick="loadDetail('concepts', '${item.concept.id}')">${item.concept.name || item.concept.id}</li>
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                if (item.unit) {
+                    html += `
+                        <div class="detail-section">
+                            <h4>Unit</h4>
+                            <ul class="related-list">
+                                <li onclick="loadDetail('units', '${item.unit.id}')">${item.unit.name || item.unit.id}</li>
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                if (item.constants && item.constants.length > 0) {
+                    html += `<div class="detail-section"><h4>Constants (${item.constants.length})</h4><ul class="related-list">`;
+                    for (const c of item.constants.slice(0, 10)) {
+                        html += `<li onclick="loadDetail('constants', '${c.id}')">${c.name || c.id}</li>`;
+                    }
+                    if (item.constants.length > 10) {
+                        html += `<li style="color: var(--text-muted); cursor: default;">... and ${item.constants.length - 10} more</li>`;
+                    }
+                    html += `</ul></div>`;
+                }
+            }
+
+            if (resource === 'concepts') {
+                if (item.parts && item.parts.length > 0) {
+                    html += `<div class="detail-section"><h4>Parts</h4><ul class="related-list">`;
+                    for (const p of item.parts) {
+                        html += `<li onclick="loadDetail('concepts', '${p.id}')">${p.name || p.id}</li>`;
+                    }
+                    html += `</ul></div>`;
+                }
+
+                if (item.broader && item.broader.length > 0) {
+                    html += `<div class="detail-section"><h4>Broader Concepts</h4><ul class="related-list">`;
+                    for (const b of item.broader) {
+                        html += `<li onclick="loadDetail('concepts', '${b.id}')">${b.name || b.id}</li>`;
+                    }
+                    html += `</ul></div>`;
+                }
+
+                if (item.quantities && item.quantities.length > 0) {
+                    html += `<div class="detail-section"><h4>Related Quantities</h4><ul class="related-list">`;
+                    for (const q of item.quantities) {
+                        html += `<li onclick="loadDetail('quantities', '${q.id}')">${q.name || q.id}</li>`;
+                    }
+                    html += `</ul></div>`;
+                }
+            }
+
+            if (resource === 'units') {
+                if (item.identifiers && item.identifiers.length > 0) {
+                    html += `<div class="detail-section"><h4>Identifiers</h4><div class="identifier-list">`;
+                    for (const ident of item.identifiers) {
+                        html += `<a href="${ident.uri}" target="_blank" class="identifier-badge"><span class="source">${ident.source}:</span> ${ident.id}</a>`;
+                    }
+                    html += `</div></div>`;
+                }
+
+                if (item.constants && item.constants.length > 0) {
+                    html += `<div class="detail-section"><h4>Constants using this unit (${item.constants.length})</h4><ul class="related-list">`;
+                    for (const c of item.constants.slice(0, 10)) {
+                        html += `<li onclick="loadDetail('constants', '${c.id}')">${c.name || c.id}</li>`;
+                    }
+                    if (item.constants.length > 10) {
+                        html += `<li style="color: var(--text-muted); cursor: default;">... and ${item.constants.length - 10} more</li>`;
+                    }
+                    html += `</ul></div>`;
+                }
+            }
+
+            if (resource === 'versions') {
+                if (item.published) {
+                    html += `
+                        <div class="detail-section">
+                            <h4>Published Date</h4>
+                            <div class="detail-value">${item.published}</div>
+                        </div>
+                    `;
+                }
+
+                if (item.constants && item.constants.length > 0) {
+                    html += `<div class="detail-section"><h4>Constants in this version (${item.constants.length})</h4><ul class="related-list">`;
+                    for (const c of item.constants.slice(0, 15)) {
+                        html += `<li onclick="loadDetail('constants', '${c.id}')">${c.name || c.id}</li>`;
+                    }
+                    if (item.constants.length > 15) {
+                        html += `<li style="color: var(--text-muted); cursor: default;">... and ${item.constants.length - 15} more</li>`;
+                    }
+                    html += `</ul></div>`;
+                }
+            }
+
+            document.getElementById('detail-body').innerHTML = html;
+        }
+
+        function openDetail() {
+            document.getElementById('detail-panel').classList.add('open');
+            document.getElementById('overlay').classList.add('open');
+        }
+
+        function closeDetail() {
+            document.getElementById('detail-panel').classList.remove('open');
+            document.getElementById('overlay').classList.remove('open');
+        }
+
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+    </script>
+</body>
+</html>

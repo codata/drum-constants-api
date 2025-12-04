@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Units - CODATA{% endblock %}
+
+{% block format_links %}{% endblock %}
+
+{% block content %}
+<article>
+    <h2>Units</h2>
+    <p>Browse all measurement units in the CODATA repository.</p>
+    
+    <div class="metadata">
+        <p><strong>Total Units:</strong> <span class="badge">{{ resources|length }}</span></p>
+    </div>
+    
+    <ul class="list">
+    {% for unit in resources %}
+        <li>
+            <a href="{{ root_path }}/units/{{ unit.id }}">{{ unit.name }}</a>
+            <span class="uri">{{ unit.uri }}</span>
+        </li>
+    {% endfor %}
+    </ul>
+</article>
+{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{{ json_ld | safe }}
+</script>
+{% endblock %}
