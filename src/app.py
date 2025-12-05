@@ -89,6 +89,22 @@ async def add_root_path_from_forwarded_prefix(request: Request, call_next):
             request.scope["root_path"] = prefix
     return await call_next(request)
 
+# Handle trailing slashes by redirecting to non-trailing version
+@app.middleware("http")
+async def redirect_trailing_slash(request: Request, call_next):
+    """Redirect URLs with trailing slashes to their non-trailing-slash version."""
+    from fastapi.responses import RedirectResponse
+    
+    path = request.url.path
+    # Skip root path and static files (which may have legitimate trailing slashes)
+    if path != "/" and path.endswith("/") and not path.startswith("/playground"):
+        # Remove trailing slash and redirect
+        new_path = path.rstrip("/")
+        new_url = request.url.replace(path=new_path)
+        return RedirectResponse(url=new_url, status_code=307)
+    
+    return await call_next(request)
+
 # Serve SPARQL interface at clean URL without .html extension
 # This route must be defined BEFORE mounting static files to avoid being caught by StaticFiles
 @app.get("/playground", response_class=FileResponse)
@@ -110,6 +126,13 @@ async def sparql_interface():
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/playground", StaticFiles(directory=str(static_dir), html=True), name="static")
+
+# Catch-all route for unmatched paths - returns 404 with path and method info
+# This must be defined AFTER the StaticFiles mount to catch remaining 404s
+@app.get("/{full_path:path}", status_code=404)
+async def catch_all_404(full_path: str, request: Request):
+    """Catch all 404s not handled by other routes or static files."""
+    raise HTTPException(status_code=404, detail=f"Not Found: {full_path}")
 
 # Configure Jinja2 templates
 templates_dir = Path(__file__).parent / "templates"
