@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
     global graph
     # Startup
     graph = load_rdf_data()
-    build_version = "v2025-12-06-01:33-middleware-order-fix"
+    build_version = "v2025-12-06-01:37-fix-root-path-function"
     logger.info(f"=== BUILD VERSION: {build_version} ===")
     print(f"=== BUILD VERSION: {build_version} ===", flush=True)
     logger.info(f"Loaded {len(graph)} triples from RDF data files")
@@ -125,27 +125,15 @@ async def handle_trailing_slashes(request: Request, call_next):
 # This middleware must be defined LAST so it executes FIRST (before trailing slash handler)
 @app.middleware("http")
 async def add_root_path_from_forwarded_prefix(request: Request, call_next):
-    from fastapi.responses import RedirectResponse
-    
-    path = request.url.path
-    root_path = request.scope.get("root_path", "")
-    print(f"[TRAILING SLASH] Request path: {path}, root_path: {root_path}, ends with /: {path.endswith('/')}", flush=True)
-    logger.info(f"[TRAILING SLASH] Request path: {path}, root_path: {root_path}, ends with /: {path.endswith('/')}")
-    
-    # Redirect paths with trailing slashes to non-trailing versions
-    # Exception: root path "/" and /playground/* should keep trailing slashes as-is
-    if path != "/" and path.endswith("/") and not path.startswith("/playground/"):
-        # Strip trailing slash and build redirect URL with root_path
-        new_path = path.rstrip("/")
-        # Include root_path in the redirect URL so proxy context is preserved
-        full_path = f"{root_path}{new_path}" if root_path else new_path
-        # Preserve query string if present
-        query_string = request.url.query
-        redirect_url = f"{full_path}?{query_string}" if query_string else full_path
-        print(f"[TRAILING SLASH] Redirecting to: {redirect_url}", flush=True)
-        logger.info(f"[TRAILING SLASH] Redirecting to: {redirect_url}")
-        return RedirectResponse(url=redirect_url, status_code=307)
-    
+    prefix = request.headers.get("x-forwarded-prefix")
+    print(f"[ROOT_PATH] X-Forwarded-Prefix header: {prefix}", flush=True)
+    logger.info(f"[ROOT_PATH] X-Forwarded-Prefix header: {prefix}")
+    if prefix:
+        prefix = prefix.rstrip("/")
+        if prefix:
+            request.scope["root_path"] = prefix
+            print(f"[ROOT_PATH] Set root_path to: {prefix}", flush=True)
+            logger.info(f"[ROOT_PATH] Set root_path to: {prefix}")
     return await call_next(request)
 
 # Serve SPARQL interface at clean URL without .html extension
