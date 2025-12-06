@@ -66,6 +66,9 @@ async def lifespan(app: FastAPI):
     global graph
     # Startup
     graph = load_rdf_data()
+    build_version = "v2025-12-06-01:33-middleware-order-fix"
+    logger.info(f"=== BUILD VERSION: {build_version} ===")
+    print(f"=== BUILD VERSION: {build_version} ===", flush=True)
     logger.info(f"Loaded {len(graph)} triples from RDF data files")
     logger.info("Trailing slash redirect middleware is active")
     yield
