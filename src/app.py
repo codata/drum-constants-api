@@ -97,6 +97,8 @@ async def handle_trailing_slashes(request: Request, call_next):
     from fastapi.responses import RedirectResponse
     
     path = request.url.path
+    print(f"[TRAILING SLASH DEBUG] Request path: {path}, ends with /: {path.endswith('/')}")
+    
     # Redirect paths with trailing slashes to non-trailing versions
     # Exception: root path "/" and /playground/* should keep trailing slashes as-is
     if path != "/" and path.endswith("/") and not path.startswith("/playground/"):
@@ -105,6 +107,7 @@ async def handle_trailing_slashes(request: Request, call_next):
         # Preserve query string if present
         query_string = request.url.query
         redirect_url = f"{new_path}?{query_string}" if query_string else new_path
+        print(f"[TRAILING SLASH DEBUG] Redirecting to: {redirect_url}")
         # Use relative URL to preserve proxied context (root_path)
         return RedirectResponse(url=redirect_url, status_code=307)
     
