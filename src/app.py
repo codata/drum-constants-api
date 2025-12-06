@@ -1,4 +1,5 @@
 import os
+import logging
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, Response, FileResponse
@@ -15,6 +16,8 @@ from rdflib import Graph, Literal, Namespace, RDF, URIRef
 from pathlib import Path
 from contextlib import asynccontextmanager
 import json
+
+logger = logging.getLogger(__name__)
 
 
 MODEL = Namespace("https://w3id.org/codata/model/")
@@ -97,7 +100,7 @@ async def handle_trailing_slashes(request: Request, call_next):
     from fastapi.responses import RedirectResponse
     
     path = request.url.path
-    print(f"[TRAILING SLASH DEBUG] Request path: {path}, ends with /: {path.endswith('/')}")
+    logger.info(f"[TRAILING SLASH] Request path: {path}, ends with /: {path.endswith('/')}")
     
     # Redirect paths with trailing slashes to non-trailing versions
     # Exception: root path "/" and /playground/* should keep trailing slashes as-is
@@ -107,7 +110,7 @@ async def handle_trailing_slashes(request: Request, call_next):
         # Preserve query string if present
         query_string = request.url.query
         redirect_url = f"{new_path}?{query_string}" if query_string else new_path
-        print(f"[TRAILING SLASH DEBUG] Redirecting to: {redirect_url}")
+        logger.info(f"[TRAILING SLASH] Redirecting to: {redirect_url}")
         # Use relative URL to preserve proxied context (root_path)
         return RedirectResponse(url=redirect_url, status_code=307)
     
