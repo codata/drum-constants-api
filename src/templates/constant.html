@@ -6,58 +6,62 @@
 <article typeof="schema:Thing">
     <h2 property="schema:name">{{ resource.name }}</h2>
     <p class="uri" property="@id">{{ resource.uri }}</p>
-    
+
     <div class="metadata">
         <dl>
             <dt>ID:</dt>
             <dd><code>{{ resource.id }}</code></dd>
-            
+
             {% if resource.value %}
             <dt>Value:</dt>
-            <dd property="schema:value"><code>{{ resource.value.value }}</code></dd>
-            
+            <dd property="schema:value"><code id="value-{{ resource.id }}">{{ resource.value.value }}</code> <button
+                    type="button" onclick="copyToClipboard('value-{{ resource.id }}')" class="copy-btn" title="Copy to clipboard">📋</button>
+            </dd>
+
             <dt>Uncertainty:</dt>
-            <dd><code>{{ resource.value.uncertainty }}</code></dd>
-            
+            <dd><code id="uncertainty-{{ resource.id }}">{{ resource.value.uncertainty }}</code> <button
+                    type="button" onclick="copyToClipboard('uncertainty-{{ resource.id }}')" class="copy-btn" title="Copy to clipboard">📋</button>
+            </dd>
+
             <dt>Version:</dt>
             <dd><code>{{ resource.value.versionId }}</code></dd>
-            
+
             {% if resource.value.isExact %}
             <dt>Exact:</dt>
             <dd><span class="badge">Exact Value</span></dd>
             {% endif %}
             {% endif %}
-            
+
             {% if resource.unit %}
             <dt>Unit:</dt>
             <dd><a href="{{ root_path }}/units/{{ resource.unit.id }}">{{ resource.unit.name }}</a></dd>
             {% endif %}
-            
+
             {% if resource.quantity %}
             <dt>Quantity:</dt>
             <dd><a href="{{ root_path }}/quantities/{{ resource.quantity.id }}">{{ resource.quantity.name }}</a></dd>
             {% endif %}
-            
+
             {% if resource.identifiers %}
             <dt>Identifiers:</dt>
             <dd>
                 <ul class="list">
-                {% for identifier in resource.identifiers %}
+                    {% for identifier in resource.identifiers %}
                     <li>
-                        <strong>{{ identifier.id }}:</strong> 
+                        <strong>{{ identifier.id }}:</strong>
                         {% if identifier.url %}
                         <a href="{{ identifier.url }}" target="_blank">{{ identifier.value }}</a>
                         {% else %}
                         {{ identifier.value }}
                         {% endif %}
                     </li>
-                {% endfor %}
+                    {% endfor %}
                 </ul>
             </dd>
             {% endif %}
         </dl>
     </div>
-    
+
     {% if resource.historicalValues %}
     <h3>Historical Values</h3>
     <div class="metadata">
@@ -74,8 +78,9 @@
                 {% for value in resource.historicalValues %}
                 <tr style="border-top: 1px solid #dee2e6;">
                     <td style="padding: 0.5rem;">{{ value.versionId }}</td>
-                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;">{{ value.value }}</td>
-                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;">{{ value.uncertainty }}</td>
+                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;"><span id="hist-value-{{ value.versionId }}">{{ value.value }}</span> <button type="button" onclick="copyToClipboard('hist-value-{{ value.versionId }}')" class="copy-btn" title="Copy to clipboard">📋</button></td>
+                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;"><span id="hist-uncertainty-{{ value.versionId }}">{{ value.uncertainty }}</span> <button type="button" onclick="copyToClipboard('hist-uncertainty-{{ value.versionId }}')" class="copy-btn" title="Copy to clipboard">📋</button></td>
+
                     <td style="padding: 0.5rem; text-align: center;">
                         {% if value.isExact %}✓{% else %}—{% endif %}
                     </td>

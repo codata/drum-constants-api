@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" vocab="https://schema.org/" prefix="dcterms: http://purl.org/dc/terms/ skos: http://www.w3.org/2004/02/skos/core#">
+<html lang="en" vocab="https://schema.org/"
+    prefix="dcterms: http://purl.org/dc/terms/ skos: http://www.w3.org/2004/02/skos/core#">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,43 +12,43 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             line-height: 1.6;
             color: #333;
             background-color: #f5f5f5;
         }
-        
+
         header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 2rem 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 2rem;
         }
-        
+
         header h1 {
             font-size: 1.8rem;
             font-weight: 600;
         }
-        
+
         header p {
             opacity: 0.9;
             margin-top: 0.5rem;
         }
-        
+
         nav {
             background: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
             margin-bottom: 2rem;
         }
-        
+
         nav ul {
             list-style: none;
             display: flex;
@@ -54,23 +56,23 @@
             gap: 1rem;
             padding: 1rem 0;
         }
-        
+
         nav a {
             color: #667eea;
             text-decoration: none;
             font-weight: 500;
             transition: color 0.2s;
         }
-        
+
         nav a:hover {
             color: #764ba2;
         }
-        
+
         main {
             background: white;
             border-radius: 8px;
             padding: 2rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             margin-bottom: 2rem;
         }
 
@@ -82,15 +84,15 @@
             border-radius: 6px;
             margin: 1rem 0 1.5rem 0;
             font-weight: 600;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         }
-        
+
         h2 {
             color: #667eea;
             margin-bottom: 1rem;
             font-size: 1.5rem;
         }
-        
+
         .metadata {
             background: #f8f9fa;
             border-left: 4px solid #667eea;
@@ -98,22 +100,22 @@
             margin: 1.5rem 0;
             border-radius: 4px;
         }
-        
+
         .metadata dl {
             display: grid;
             grid-template-columns: auto 1fr;
             gap: 0.5rem 1rem;
         }
-        
+
         .metadata dt {
             font-weight: 600;
             color: #555;
         }
-        
+
         .metadata dd {
             color: #333;
         }
-        
+
         .metadata dd code {
             background: #e9ecef;
             padding: 0.2rem 0.4rem;
@@ -121,42 +123,42 @@
             font-family: 'Courier New', monospace;
             font-size: 0.9rem;
         }
-        
+
         a {
             color: #667eea;
             text-decoration: none;
         }
-        
+
         a:hover {
             text-decoration: underline;
         }
-        
+
         .uri {
             color: #6c757d;
             font-size: 0.9rem;
             word-break: break-all;
         }
-        
+
         .list {
             list-style: none;
         }
-        
+
         .list li {
             padding: 0.5rem 0;
             border-bottom: 1px solid #e9ecef;
         }
-        
+
         .list li:last-child {
             border-bottom: none;
         }
-        
+
         footer {
             text-align: center;
             color: #6c757d;
             padding: 2rem 0;
             font-size: 0.9rem;
         }
-        
+
         .badge {
             display: inline-block;
             background: #667eea;
@@ -166,7 +168,7 @@
             font-size: 0.85rem;
             margin-left: 0.5rem;
         }
-        
+
         .json-ld {
             background: #f8f9fa;
             border: 1px solid #dee2e6;
@@ -175,13 +177,13 @@
             margin-top: 2rem;
             overflow-x: auto;
         }
-        
+
         .json-ld pre {
             margin: 0;
             font-size: 0.85rem;
             color: #495057;
         }
-        
+
         .format-links {
             background: #f8f9fa;
             border: 1px solid #dee2e6;
@@ -193,12 +195,12 @@
             flex-wrap: wrap;
             gap: 0.5rem;
         }
-        
+
         .format-links strong {
             color: #555;
             margin-right: 0.5rem;
         }
-        
+
         .format-links a {
             display: inline-block;
             padding: 0.25rem 0.6rem;
@@ -210,15 +212,29 @@
             font-weight: 500;
             transition: all 0.2s;
         }
-        
+
         .format-links a:hover {
             background: #667eea;
             color: white;
             text-decoration: none;
         }
     </style>
+    <script>
+        function copyToClipboard(elementId) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const text = el.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                // Optionally provide feedback
+                console.log('Copied to clipboard');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+            });
+        }
+    </script>
     {% block extra_head %}{% endblock %}
 </head>
+
 <body>
     {% set root_path = request.scope.get('root_path', '') %}
     <header>
@@ -227,7 +243,7 @@
             <p>Open Science Data Repository</p>
         </div>
     </header>
-    
+
     <nav>
         <div class="container">
             <ul>
@@ -241,7 +257,7 @@
             </ul>
         </div>
     </nav>
-    
+
     <div class="container">
         <div class="warning-banner">
             Experimental preview for evaluation only. Not for official use.
@@ -251,25 +267,31 @@
         <div class="format-links">
             <strong>View as:</strong>
             <a href="{{ root_path }}{{ request.url.path }}?format=json" target="_blank" title="JSON format">JSON</a>
-            <a href="{{ root_path }}{{ request.url.path }}?format=jsonld" target="_blank" title="JSON-LD format">JSON-LD</a>
-            <a href="{{ root_path }}{{ request.url.path }}?format=turtle" target="_blank" title="Turtle RDF format">Turtle</a>
-            <a href="{{ root_path }}{{ request.url.path }}?format=rdfxml" target="_blank" title="RDF/XML format">RDF/XML</a>
-            <a href="{{ root_path }}{{ request.url.path }}?format=ntriples" target="_blank" title="N-Triples format">N-Triples</a>
+            <a href="{{ root_path }}{{ request.url.path }}?format=jsonld" target="_blank"
+                title="JSON-LD format">JSON-LD</a>
+            <a href="{{ root_path }}{{ request.url.path }}?format=turtle" target="_blank"
+                title="Turtle RDF format">Turtle</a>
+            <a href="{{ root_path }}{{ request.url.path }}?format=rdfxml" target="_blank"
+                title="RDF/XML format">RDF/XML</a>
+            <a href="{{ root_path }}{{ request.url.path }}?format=ntriples" target="_blank"
+                title="N-Triples format">N-Triples</a>
             <a href="{{ root_path }}{{ request.url.path }}?format=n3" target="_blank" title="Notation3 format">N3</a>
         </div>
         {% endif %}
         {% endblock %}
-        
+
         <main>
             {% block content %}{% endblock %}
         </main>
-        
+
         <footer>
-            <p>&copy; 2026 CODATA. Licensed under MIT. 
-            <a href="https://github.com/codata/drum-api" target="_blank">View on GitHub</a></p>
+            <p>&copy; 2026 CODATA. Licensed under MIT.
+                <a href="https://github.com/codata/drum-api" target="_blank">View on GitHub</a>
+            </p>
         </footer>
     </div>
-    
+
     {% block structured_data %}{% endblock %}
 </body>
+
 </html>
