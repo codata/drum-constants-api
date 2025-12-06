@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from .model import Concept, Quantity, Constant, ConstantValue, Unit, Version, Identifier
 from .config import settings
 from pydantic import BaseModel
@@ -89,22 +90,6 @@ async def add_root_path_from_forwarded_prefix(request: Request, call_next):
             request.scope["root_path"] = prefix
     return await call_next(request)
 
-# Handle trailing slashes by redirecting to non-trailing version
-@app.middleware("http")
-async def redirect_trailing_slash(request: Request, call_next):
-    """Redirect URLs with trailing slashes to their non-trailing-slash version."""
-    from fastapi.responses import RedirectResponse
-    
-    path = request.url.path
-    # Skip root path and static files (which may have legitimate trailing slashes)
-    if path != "/" and path.endswith("/") and not path.startswith("/playground"):
-        # Remove trailing slash and redirect
-        new_path = path.rstrip("/")
-        new_url = request.url.replace(path=new_path)
-        return RedirectResponse(url=new_url, status_code=307)
-    
-    return await call_next(request)
-
 # Serve SPARQL interface at clean URL without .html extension
 # This route must be defined BEFORE mounting static files to avoid being caught by StaticFiles
 @app.get("/playground", response_class=FileResponse)
@@ -127,16 +112,40 @@ static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/playground", StaticFiles(directory=str(static_dir), html=True), name="static")
 
-# Catch-all route for unmatched paths - returns 404 with path and method info
-# This must be defined AFTER the StaticFiles mount to catch remaining 404s
-@app.get("/{full_path:path}", status_code=404)
-async def catch_all_404(full_path: str, request: Request):
-    """Catch all 404s not handled by other routes or static files."""
-    raise HTTPException(status_code=404, detail=f"Not Found: {full_path}")
-
 # Configure Jinja2 templates
 templates_dir = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
+
+
+# Custom exception handler for 404 Not Found with trailing slash handling
+@app.exception_handler(StarletteHTTPException)
+async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Handle Starlette HTTPException (includes 404 from routing)."""
+    from fastapi.responses import RedirectResponse
+    
+    # If it's a 404 and the path ends with /, try redirecting to non-trailing version
+    if exc.status_code == 404:
+        path = request.url.path
+        if path.endswith("/") and path != "/" and not path.startswith("/playground/"):
+            # Try redirecting to version without trailing slash
+            new_path = path.rstrip("/")
+            new_url = request.url.replace(path=new_path)
+            return RedirectResponse(url=new_url, status_code=307)
+        
+        # Return structured 404 response with path and method
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail": f"Not Found: {request.url.path}",
+                "path": request.url.path,
+                "method": request.method
+            }
+        )
+    
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": str(exc.detail)}
+    )
 
 
 # Custom exception handler for HTTPException to include path for 404 errors
