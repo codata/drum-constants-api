@@ -17,6 +17,9 @@ from rdflib import Graph, Literal, Namespace, RDF, URIRef
 from pathlib import Path
 from contextlib import asynccontextmanager
 import json
+import time
+import hashlib
+
 
 # Configure logging to stderr with INFO level
 logging.basicConfig(
@@ -47,6 +50,9 @@ XSD = Namespace("http://www.w3.org/2001/XMLSchema#")
 # Global RDF graph - loaded at module level before gunicorn forks workers
 # This way the read-only graph is shared across all worker processes
 graph: Graph = None
+
+# Cache for slow SPARQL queries (> 0.5s)
+QUERY_CACHE = {}
 
 _ext_to_format = {
     ".ttl": "turtle",
@@ -296,8 +302,34 @@ def run_sparql_query(query: str):
     if graph is None:
         raise GraphNotInitializedError("RDF graph not initialized")
 
+    # Normalize whitespace to improve cache hits and hash the query
+    normalized_query = " ".join(query.split())
+    query_key = hashlib.sha256(normalized_query.encode()).hexdigest()
+
+    # Check cache first
+    if query_key in QUERY_CACHE:
+        logger.info(f"SPARQL cache hit (hash: {query_key[:10]}...)")
+        return QUERY_CACHE[query_key]
+
     try:
-        return graph.query(query)
+        start_time = time.time()
+        results = graph.query(query)
+        duration = time.time() - start_time
+
+        # Cache if query duration > 0.5 seconds
+        if duration > 0.5:
+            # Force materialization to make the Result object reusable in cache
+            if hasattr(results, "bindings"):
+                # SELECT/ASK query: materializes bindings list
+                _ = results.bindings
+            elif hasattr(results, "graph"):
+                # CONSTRUCT/DESCRIBE query: materializes the result graph
+                _ = results.graph
+            
+            QUERY_CACHE[query_key] = results
+            logger.info(f"SPARQL query took {duration:.2f}s, added to cache (hash: {query_key[:10]}...)")
+
+        return results
     except Exception as e:
         raise SparqlQueryError(f"SPARQL query error: {str(e)}", e)
 
