@@ -2,14 +2,13 @@
 name = "drum-api"
 version = "0.1.0"
 description = "Open source Flask API package."
-authors = [
-    {name = "Pascal Heus", email = "pascal@codata.org"}
-]
+authors = [{ name = "Pascal Heus", email = "pascal@codata.org" }]
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi",
+    "gunicorn",
     "uvicorn",
     "pydantic",
     "rdflib",
@@ -18,11 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest",
-    "requests",
-    "httpx",
-]
+dev = ["pytest", "requests", "httpx"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
@@ -32,7 +27,7 @@ include = [
     "src/data/*.ttl",
     "src/data/*.rdf",
     "src/data/*.n3",
-    "src/static/**/*"
+    "src/static/**/*",
 ]
 
 [build-system]
