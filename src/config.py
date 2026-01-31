@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 from pathlib import Path
 
@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = ["*"]
     DATA_DIR: Path = Path(__file__).resolve().parent / "data"
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_file=".env")
 
 settings = Settings()

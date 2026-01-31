@@ -71,3 +71,65 @@ def test_constant_detail_turtle(client):
 def test_constant_detail_not_found(client):
     response = client.get('/constants/non_existent_constant_id_12345')
     assert response.status_code == 404
+
+def test_concepts_browse(client):
+    response = client.get('/concepts')
+    assert response.status_code == 200
+    data = response.json()
+    if len(data) > 0:
+        assert "id" in data[0]
+        assert "uri" in data[0]
+
+def test_concept_detail(client):
+    list_response = client.get('/concepts')
+    if list_response.status_code == 200 and len(list_response.json()) > 0:
+        c_id = list_response.json()[0]['id']
+        response = client.get(f'/concepts/{c_id}')
+        assert response.status_code == 200
+        assert response.json()["id"] == c_id
+
+def test_quantities_browse(client):
+    response = client.get('/quantities')
+    assert response.status_code == 200
+    data = response.json()
+    if len(data) > 0:
+        assert "id" in data[0]
+        assert "name" in data[0]
+
+def test_quantity_detail(client):
+    list_response = client.get('/quantities')
+    if list_response.status_code == 200 and len(list_response.json()) > 0:
+        q_id = list_response.json()[0]['id']
+        response = client.get(f'/quantities/{q_id}')
+        assert response.status_code == 200
+        assert response.json()["id"] == q_id
+
+def test_units_browse(client):
+    response = client.get('/units')
+    assert response.status_code == 200
+    data = response.json()
+    if len(data) > 0:
+        assert "id" in data[0]
+
+def test_unit_detail(client):
+    list_response = client.get('/units')
+    if list_response.status_code == 200 and len(list_response.json()) > 0:
+        u_id = list_response.json()[0]['id']
+        response = client.get(f'/units/{u_id}')
+        assert response.status_code == 200
+        assert response.json()["id"] == u_id
+
+def test_versions_browse(client):
+    response = client.get('/constants/versions')
+    assert response.status_code == 200
+    data = response.json()
+    if len(data) > 0:
+        assert "id" in data[0]
+
+def test_version_detail(client):
+    list_response = client.get('/constants/versions')
+    if list_response.status_code == 200 and len(list_response.json()) > 0:
+        v_id = list_response.json()[0]['id']
+        response = client.get(f'/constants/versions/{v_id}')
+        assert response.status_code == 200
+        assert response.json()["id"] == v_id

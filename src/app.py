@@ -408,9 +408,9 @@ def negotiate_content(uri: str, request: Request, json_response: JSONResponse,
         json_ld = json.dumps(json_data, indent=2)
         
         return templates.TemplateResponse(
+            request,
             template_name,
             {
-                "request": request,
                 "resource": resource_data,
                 "json_ld": json_ld
             }
@@ -482,9 +482,9 @@ async def index(request: Request):
     
     # Return HTML index page
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "message": "Welcome to CODATA DRUM Physical Fundamental Constants API!"
         }
     )
@@ -538,8 +538,9 @@ async def concepts(request: Request):
         if "text/html" in accept:
             json_ld = json.dumps(concepts_list, indent=2)
             return templates.TemplateResponse(
+                request,
                 "concepts.html",
-                {"request": request, "resources": concepts_list, "json_ld": json_ld}
+                {"resources": concepts_list, "json_ld": json_ld}
             )
 
         return JSONResponse(content=concepts_list)
@@ -739,8 +740,9 @@ async def quantities(request: Request):
         if "text/html" in accept:
             json_ld = json.dumps(quantities_json, indent=2)
             return templates.TemplateResponse(
+                request,
                 "quantities.html",
-                {"request": request, "resources": quantities_json, "json_ld": json_ld}
+                {"resources": quantities_json, "json_ld": json_ld}
             )
 
         return JSONResponse(content=quantities_json)
@@ -855,8 +857,9 @@ async def units(request: Request):
         if "text/html" in accept:
             json_ld = json.dumps(units_json, indent=2)
             return templates.TemplateResponse(
+                request,
                 "units.html",
-                {"request": request, "resources": units_json, "json_ld": json_ld}
+                {"resources": units_json, "json_ld": json_ld}
             )
 
         return JSONResponse(content=units_json)
@@ -964,8 +967,9 @@ async def constants(request: Request):
         if "text/html" in accept:
             json_ld = json.dumps(constants_list, indent=2)
             return templates.TemplateResponse(
+                request,
                 "constants.html",
-                {"request": request, "resources": constants_list, "json_ld": json_ld}
+                {"resources": constants_list, "json_ld": json_ld}
             )
         
         return JSONResponse(content=constants_list)
@@ -1016,8 +1020,9 @@ async def versions(request: Request):
         if "text/html" in accept:
             json_ld = json.dumps(versions_json, indent=2)
             return templates.TemplateResponse(
+                request,
                 "versions.html",
-                {"request": request, "resources": versions_json, "json_ld": json_ld}
+                {"resources": versions_json, "json_ld": json_ld}
             )
         
         return JSONResponse(content=versions_json)
@@ -1478,8 +1483,9 @@ async def versions(request: Request):
         if "text/html" in accept:
             json_ld = json.dumps(versions_json, indent=2)
             return templates.TemplateResponse(
+                request,
                 "versions.html",
-                {"request": request, "resources": versions_json, "json_ld": json_ld}
+                {"resources": versions_json, "json_ld": json_ld}
             )
         
         return JSONResponse(content=versions_json)

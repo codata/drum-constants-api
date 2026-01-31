@@ -2,29 +2,35 @@
 
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](code_of_conduct.md)
 
-**⚠️ EXPERIMENTAL / EARLY RELEASE VERSION ⚠️**
+**⚠️ EVALUATION PURPOSES ONLY ⚠️**
 
-This is an experimental, early-release open source Python API for browsing CODATA fundamental physical constants. Built with FastAPI and backed by an RDF knowledge graph accessed via SPARQL queries, it provides rich semantic data with full content negotiation support. The data underlying this project is source from https://github.com/codata/drum-constants.
+This is an **experimental edition** of the CODATA DRUM API. It is provided for evaluation and feedback purposes only. Features, endpoints, and data structures are subject to change without notice.
 
-> **Note:** This project is in active development and should be considered experimental. APIs, data models, and features may change without notice. Not recommended for production use at this time.
+## Overview
+
+The Drum API is a semantic gateway for browsing CODATA fundamental physical constants. Built with FastAPI and backed by an RDF knowledge graph, it provides rich semantic data with full content negotiation and **high-precision serialization**.
+
+The underlying data is sourced from the [CODATA DRUM Constants](https://github.com/codata/drum-constants) repository.
 
 ## Try It Now
 
-The API is available for testing, evaluation, and feedback at:
-**https://api.codata.org/drum**
+The API is available for testing at:
+**[https://api.codata.org/drum](https://api.codata.org/drum)**
 
-Explore the interactive playground and API documentation at the root endpoint.
+### Interactive Documentation & Tools
+- **Swagger UI**: `/docs`
+- **ReDoc**: `/redoc`
+- **Postman**: [CODATA DRUM Public Collection](https://www.postman.com/codata-org/workspace/codata-drum/collection/41633755-4a0c7834-ce9a-4d88-b4f0-c88f242094f5)
+- **SPARQL Playground**: `/playground/sparql`
 
 ## Features
-- **RESTful API** built with FastAPI with automatic OpenAPI documentation
+- **RESTful API** - High-performance engine built with FastAPI (Python 3.11+)
+- **High-Precision RDF** - Custom serializers preserving full decimal precision for physical constants
 - **Content Negotiation** - HTML, JSON, and RDF formats (Turtle, N-Triples, N3, JSON-LD, RDF/XML, TriG)
-- **SPARQL Backend** - RDF knowledge graph with semantic queries
-- **CODATA Constants** - Fundamental physical constants from CODATA recommendations
-- **Semantic Web** - Full RDF/linked data support with rich ontology relationships
-- **Pydantic Models** - Type-safe data validation and serialization
-- **HTML Templates** - Human-friendly browsing with Jinja2 templates
-- **Hatch Project Management** - Modern Python packaging and development workflows
-- **High-Performance** - Async API with efficient graph queries
+- **SPARQL Engine** - Direct access to the RDF knowledge graph
+- **Linked Data** - 100% URL-resolvable resources with rich semantic relationships
+- **Interactive Tools** - Integrated Swagger, ReDoc, and Postman Collection
+- **Modern Stack** - Pydantic V2, Hatch project management, and async processing
 
 ## API Endpoints
 
@@ -138,10 +144,6 @@ drum-api/
 │   └── static/             # Static assets (CSS, JS)
 ├── tests/
 │   └── test_fastapi_app.py # API test suite
-├── frontend/               # React frontend (optional)
-│   ├── src/
-│   ├── package.json
-│   └── vite.config.js
 ├── pyproject.toml          # Project configuration and dependencies
 ├── gunicorn.conf.py        # Gunicorn production configuration
 └── README.md
