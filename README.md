@@ -30,7 +30,7 @@ The API is available for testing at:
 - **SPARQL Engine** - Direct access to the RDF knowledge graph
 - **Linked Data** - 100% URL-resolvable resources with rich semantic relationships
 - **Interactive Tools** - Integrated Swagger, ReDoc, and Postman Collection
-- **Modern Stack** - Pydantic V2, Hatch project management, and async processing
+- **Modern Stack** - Pydantic V2, `uv` project management, and async processing
 
 ## API Endpoints
 
@@ -56,9 +56,8 @@ All endpoints support content negotiation via `Accept` header or `?format=` quer
 
 ## Quickstart
 
-### Prerequisites
-- Python 3.11 or higher
-- [Hatch](https://hatch.pypa.io/) for project management
+- Python 3.12 or higher
+- [uv](https://docs.astral.sh/uv/) for project management
 
 ### Setup and Run
 
@@ -68,14 +67,14 @@ All endpoints support content negotiation via `Accept` header or `?format=` quer
    cd drum-api
    ```
 
-2. Create the development environment:
+2. Create the development environment and install dependencies:
    ```bash
-   hatch env create
+   uv sync
    ```
 
 3. Run the API server:
    ```bash
-   hatch run api
+   uv run uvicorn src.app:app --reload
    ```
 
 4. Visit the API:
@@ -85,7 +84,7 @@ All endpoints support content negotiation via `Accept` header or `?format=` quer
 
 5. Run tests:
    ```bash
-   hatch run test
+   uv run pytest
    ```
 
 ## API Documentation
@@ -164,11 +163,11 @@ The `--reload` flag enables auto-reload on code changes.
 ### Running Tests
 
 ```bash
-# Run tests with Hatch
-hatch run test
+# Run tests with uv
+uv run pytest
 
-# Or use pytest directly
-pytest tests/
+# Alternatively, run with verbose output
+uv run pytest -v
 ```
 
 ## Production Deployment
@@ -245,7 +244,7 @@ This API serves fundamental physical constants from:
 - **RDFLib** - RDF graph database and SPARQL queries
 - **Pydantic** - Data validation and serialization
 - **Jinja2** - HTML templating
-- **Hatch** - Project management and packaging
+- **uv** - High-performance Python project management
 - **Uvicorn** - ASGI server
 
 ## Contributing
@@ -253,7 +252,7 @@ This API serves fundamental physical constants from:
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
 Please ensure:
-- Tests pass: `hatch run test`
+- Tests pass: `uv run pytest`
 - Code follows existing patterns
 - API changes are documented
 
