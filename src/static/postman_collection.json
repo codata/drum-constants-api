@@ -1,0 +1,820 @@
+{
+    "info": {
+        "_postman_id": "8a0a8f8e-d961-4c6e-8e9a-5f9e8a7d6c5b",
+        "name": "CODATA DRUM Physical Fundamental Constants API",
+        "description": "# CODATA DRUM Physical Fundamental Constants API\n\nThis collection provides access to the CODATA recommended values for fundamental physical constants. The API supports Semantic Web standards and Linked Data principles, providing high-precision values, units, and conceptual relationships.\n\n## Base URL\n`https://api.codata.org/drum`\n\n## Content Negotiation\nThe API supports multiple formats via the `Accept` header or the `?format=` query parameter:\n\n| Format | Accept Header | Query Param |\n| :--- | :--- | :--- |\n| **JSON** | `application/json` | `?format=json` |\n| **JSON-LD** | `application/ld+json` | `?format=jsonld` |\n| **Turtle** | `text/turtle` | `?format=turtle` |\n| **RDF/XML** | `application/rdf+xml` | `?format=rdfxml` |\n| **N-Triples** | `application/n-triples` | `?format=ntriples` |\n| **N3** | `text/n3` | `?format=n3` |\n\n## High-Precision Values\nScientific constants are provided in three representations:\n1.  **Value (String)**: Preserves the exact notation from the source (e.g., `6.62607015e-34`).\n2.  **Decimal (String)**: Full decimal expansion for exact calculations (e.g., `0.0000000000...662607015`).\n3.  **Float (Number)**: Standard IEEE 754 binary floating-point representation.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Constants",
+            "item": [
+                {
+                    "name": "List All Constants",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/constants",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "constants"
+                            ]
+                        },
+                        "description": "Retrieves the full list of CODATA fundamental physical constants with their latest recommended values."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const template = `",
+                                    "<style>",
+                                    "    body { font-family: -apple-system, system-ui, sans-serif; padding: 20px; line-height: 1.5; color: #2d3748; }",
+                                    "    h2 { color: #4a5568; margin-bottom: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px; }",
+                                    "    table { width: 100%; border-collapse: collapse; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-radius: 8px; overflow: hidden; }",
+                                    "    th { background: #667eea; color: white; text-align: left; padding: 15px; font-weight: 600; }",
+                                    "    td { background: white; border-bottom: 1px solid #edf2f7; padding: 15px; font-size: 0.95em; }",
+                                    "    tr:hover td { background: #f8f9ff; }",
+                                    "    code { background: #f1f5f9; padding: 3px 6px; border-radius: 4px; font-family: monospace; }",
+                                    "    .unit { color: #718096; font-size: 0.85em; font-weight: 600; }",
+                                    "</style>",
+                                    "<h2>Physical Constants</h2>",
+                                    "<table>",
+                                    "    <thead><tr><th>Constant Name</th><th>Recommended Value</th><th>Unit</th></tr></thead>",
+                                    "    <tbody>",
+                                    "        {{#each response}}",
+                                    "        <tr>",
+                                    "            <td><strong>{{name}}</strong></td>",
+                                    "            <td><code>{{value.value}}</code></td>",
+                                    "            <td><span class=\"unit\">{{unit.name}}</span></td>",
+                                    "        </tr>",
+                                    "        {{/each}}",
+                                    "    </tbody>",
+                                    "</table>",
+                                    "`;",
+                                    "pm.visualizer.set(template, { response: pm.response.json() });"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Constant Detail",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/constants/PlanckConstant",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "constants",
+                                "PlanckConstant"
+                            ]
+                        },
+                        "description": "Retrieves detailed information about a specific constant, including its current value, unit, quantity category, and full historical value set.\n\nExample IDs: `PlanckConstant`, `SpeedOfLight`, `FineStructureConstant`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const template = `",
+                                    "<style>",
+                                    "    body { font-family: -apple-system, system-ui, sans-serif; padding: 30px; color: #2d3748; background: #f7fafc; }",
+                                    "    .card { background: white; border-radius: 12px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); padding: 30px; max-width: 800px; margin: 0 auto; border-top: 5px solid #667eea; }",
+                                    "    h1 { margin-top: 0; color: #2d3748; font-size: 1.8em; }",
+                                    "    .metadata { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; background: #f8f9ff; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }",
+                                    "    .label { font-size: 0.75em; color: #718096; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800; margin-bottom: 4px; }",
+                                    "    .val { font-size: 1.1em; color: #2d3748; font-weight: 600; font-family: 'JetBrains Mono', 'Fira Code', monospace; }",
+                                    "    .unit-tag { font-size: 0.8em; color: #667eea; background: rgba(102, 126, 234, 0.1); padding: 2px 8px; border-radius: 4px; margin-left: 5px; }",
+                                    "    table { width: 100%; border-collapse: collapse; margin-top: 20px; }",
+                                    "    th { text-align: left; padding: 12px; border-bottom: 2px solid #e2e8f0; color: #4a5568; font-size: 0.9em; }",
+                                    "    td { padding: 12px; border-bottom: 1px solid #edf2f7; font-size: 0.9em; }",
+                                    "    .exact-badge { background: #38a169; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.7em; vertical-align: middle; margin-left: 8px; }",
+                                    "    .v-id { font-weight: bold; color: #667eea; }",
+                                    "    .section-title { font-size: 1.1em; color: #4a5568; margin: 40px 0 15px 0; display: flex; align-items: center; gap: 10px; }",
+                                    "    .section-title::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }",
+                                    "</style>",
+                                    "<div class=\"card\">",
+                                    "    <div style=\"display: flex; justify-content: space-between; align-items: flex-start;\">",
+                                    "        <h1>{{response.name}}</h1>",
+                                    "        <span class=\"val\" style=\"color: #667eea; font-size: 0.9em;\">{{response.id}}</span>",
+                                    "    </div>",
+                                    "    <div class=\"metadata\">",
+                                    "        <div style=\"grid-column: span 2; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 5px;\">",
+                                    "            <div class=\"label\">Latest Value ({{response.value.versionId}})</div>",
+                                    "            <div class=\"val\" style=\"font-size: 1.6em; color: #2d3748;\">",
+                                    "                {{response.value.value}}",
+                                    "                {{#if response.value.isExact}}<span class=\"exact-badge\">EXACT</span>{{/if}}",
+                                    "            </div>",
+                                    "        </div>",
+                                    "        <div><div class=\"label\">Uncertainty</div><div class=\"val\">{{#if response.value.uncertainty}}{{response.value.uncertainty}}{{else}}0 (Exact Value){{/if}}</div></div>",
+                                    "        <div><div class=\"label\">Unit</div><div class=\"val\">{{response.unit.name}}</div></div>",
+                                    "        <div><div class=\"label\">Quantity</div><div class=\"val\">{{response.quantity.name}}</div></div>",
+                                    "        <div><div class=\"label\">System ID</div><div class=\"val\">{{response.id}}</div></div>",
+                                    "    </div>",
+                                    "    ",
+                                    "    <div class=\"section-title\">Historical Recommended Values</div>",
+                                    "    <table>",
+                                    "        <thead><tr><th>Year</th><th>Value</th><th>Uncertainty</th></tr></thead>",
+                                    "        <tbody>",
+                                    "            {{#each response.historicalValues}}",
+                                    "            <tr>",
+                                    "                <td class=\"v-id\">{{versionId}}</td>",
+                                    "                <td><code>{{value}}</code> {{#if isExact}}<span style=\"color: #38a169; font-weight: bold; font-size: 0.8em;\">(Exact)</span>{{/if}}</td>",
+                                    "                <td>{{#if uncertainty}}{{uncertainty}}{{else}}-{{/if}}</td>",
+                                    "            </tr>",
+                                    "        {{/each}}",
+                                    "    </tbody>",
+                                    "</table>",
+                                    "</div>",
+                                    "`;",
+                                    "pm.visualizer.set(template, { response: pm.response.json() });"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Specific Constant Version",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/constants/NewtonianConstantOfGravitation/2022",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "constants",
+                                "NewtonianConstantOfGravitation",
+                                "2022"
+                            ]
+                        },
+                        "description": "Retrieves the specific value and uncertainty for a constant as recommended in a particular CODATA version (e.g., 2022, 2018, 2014)."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const template = `",
+                                    "<style>",
+                                    "    body { font-family: -apple-system, system-ui, sans-serif; padding: 30px; color: #2d3748; background: #f7fafc; }",
+                                    "    .card { background: white; border-radius: 12px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); padding: 30px; max-width: 600px; margin: 0 auto; border-top: 5px solid #667eea; }",
+                                    "    h1 { margin-top: 0; color: #2d3748; font-size: 1.8em; }",
+                                    "    .metadata { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; background: #f8f9ff; padding: 20px; border-radius: 8px; }",
+                                    "    .label { font-size: 0.85em; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; font-weight: bold; }",
+                                    "    .val { font-size: 1.1em; color: #4a5568; font-weight: 600; }",
+                                    "    code { background: #f1f5f9; padding: 3px 6px; border-radius: 4px; font-family: monospace; }",
+                                    "    .exact { color: #38a169; font-weight: bold; font-size: 0.85em; }",
+                                    "</style>",
+                                    "<div class=\"card\">",
+                                    "    <h1>{{response.name}} ({{response.versionId}})</h1>",
+                                    "    <div class=\"metadata\">",
+                                    "        <div><div class=\"label\">Value</div><div class=\"val\"><code>{{response.value}}</code> {{#if response.isExact}}<span class=\"exact\">(Exact)</span>{{/if}}</div></div>",
+                                    "        <div><div class=\"label\">Uncertainty</div><div class=\"val\">{{#if response.uncertainty}}<code>{{response.uncertainty}}</code>{{else}}-{{/if}}</div></div>",
+                                    "        <div><div class=\"label\">Unit</div><div class=\"val\">{{response.unit.name}}</div></div>",
+                                    "        <div><div class=\"label\">Quantity</div><div class=\"val\">{{response.quantity.name}}</div></div>",
+                                    "    </div>",
+                                    "</div>",
+                                    "`;",
+                                    "pm.visualizer.set(template, { response: pm.response.json() });"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ],
+            "description": "Endpoints related to fundamental physical constants."
+        },
+        {
+            "name": "Quantities",
+            "item": [
+                {
+                    "name": "List All Quantities",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/quantities",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "quantities"
+                            ]
+                        },
+                        "description": "Lists physical quantities (e.g., Mass, Time, Energy) that categorize the constants."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const template = `",
+                                    "<style>",
+                                    "    body { font-family: sans-serif; padding: 20px; color: #2d3748; }",
+                                    "    .list-item { background: white; border: 1px solid #edf2f7; margin-bottom: 8px; padding: 12px 20px; border-radius: 8px; border-left: 4px solid #667eea; transition: transform 0.1s; }",
+                                    "    .list-item:hover { transform: translateX(5px); background: #f8f9ff; }",
+                                    "    .name { font-weight: 600; color: #4a5568; }",
+                                    "    .uri { font-size: 0.8em; color: #a0aec0; display: block; }",
+                                    "</style>",
+                                    "<h2>Physical Quantities</h2>",
+                                    "{{#each response}}",
+                                    "<div class=\"list-item\">",
+                                    "    <span class=\"name\">{{name}}</span>",
+                                    "    <span class=\"uri\">{{uri}}</span>",
+                                    "</div>",
+                                    "{{/each}}",
+                                    "`;",
+                                    "pm.visualizer.set(template, { response: pm.response.json() });"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Quantity Detail",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/quantities/AlphaParticleElectronMassRatio",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "quantities",
+                                "AlphaParticleElectronMassRatio"
+                            ]
+                        },
+                        "description": "Retrieves all constants associated with a specific physical quantity."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const template = `",
+                                    "<style>",
+                                    "    body { font-family: -apple-system, system-ui, sans-serif; padding: 30px; color: #2d3748; background: #fdfbff; }",
+                                    "    .card { background: white; border-radius: 12px; box-shadow: 0 10px 15px rgba(0,0,0,0.05); padding: 30px; max-width: 700px; margin: 0 auto; border-top: 5px solid #764ba2; }",
+                                    "    h1 { color: #2d3748; font-size: 1.6em; margin-bottom: 5px; }",
+                                    "    .uri { font-size: 0.8em; color: #a0aec0; margin-bottom: 25px; display: block; }",
+                                    "    .section { margin-bottom: 25px; }",
+                                    "    .section-label { font-size: 0.75em; color: #764ba2; text-transform: uppercase; font-weight: 800; border-bottom: 1px solid #f0e6ff; margin-bottom: 12px; padding-bottom: 4px; display: block; }",
+                                    "    .tag { display: inline-block; background: #f3f0ff; color: #764ba2; padding: 4px 12px; border-radius: 16px; font-size: 0.9em; font-weight: 500; margin: 0 8px 8px 0; }",
+                                    "    .constant-link { display: block; background: #fff; border: 1px solid #edf2f7; padding: 12px 15px; border-radius: 8px; margin-bottom: 8px; text-decoration: none; color: #4a5568; font-weight: 600; border-left: 4px solid #667eea; }",
+                                    "</style>",
+                                    "<div class=\"card\">",
+                                    "    <h1>{{response.name}}</h1>",
+                                    "    <span class=\"uri\">{{response.uri}}</span>",
+                                    "    ",
+                                    "    <div class=\"section\">",
+                                    "        <span class=\"section-label\">Concepts</span>",
+                                    "        {{#each response.concepts}}",
+                                    "        <span class=\"tag\">{{name}}</span>",
+                                    "        {{/each}}",
+                                    "    </div>",
+                                    "    ",
+                                    "    <div class=\"section\">",
+                                    "        <span class=\"section-label\">Associated Constants</span>",
+                                    "        {{#each response.constants}}",
+                                    "        <div class=\"constant-link\">{{name}}</div>",
+                                    "        {{/each}}",
+                                    "    </div>",
+                                    "</div>",
+                                    "`;",
+                                    "pm.visualizer.set(template, { response: pm.response.json() });"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Units",
+            "item": [
+                {
+                    "name": "List All Units",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/units",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "units"
+                            ]
+                        },
+                        "description": "Lists all measurement units used in the dataset."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const template = `",
+                                    "<style>",
+                                    "    body { font-family: sans-serif; padding: 20px; color: #2d3748; }",
+                                    "    .unit-card { display: inline-block; background: #f8fbff; border: 1px solid #d1e3ff; margin: 5px; padding: 10px 20px; border-radius: 20px; font-weight: 500; color: #4169e1; }",
+                                    "    h2 { color: #667eea; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }",
+                                    "</style>",
+                                    "<h2>Measurement Units</h2>",
+                                    "{{#each response}}",
+                                    "<div class=\"unit-card\">{{name}}</div>",
+                                    "{{/each}}",
+                                    "`;",
+                                    "pm.visualizer.set(template, { response: pm.response.json() });"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Unit Detail",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/units/A",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "units",
+                                "A"
+                            ]
+                        },
+                        "description": "Retrieves information about a unit and lists constants that use this unit."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const template = `",
+                                    "<style>",
+                                    "    body { font-family: sans-serif; padding: 30px; background: #f0f7ff; }",
+                                    "    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 600px; margin: 0 auto; border-top: 5px solid #4169e1; }",
+                                    "    h1 { color: #2d3748; margin-bottom: 5px; }",
+                                    "    .uri { font-size: 0.8em; color: #a0aec0; display: block; margin-bottom: 25px; }",
+                                    "    .constant { background: #f8fbff; padding: 12px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #e1e8f0; color: #4169e1; font-weight: 500; }",
+                                    "</style>",
+                                    "<div class=\"card\">",
+                                    "    <h1>Unit: {{response.name}}</h1>",
+                                    "    <span class=\"uri\">{{response.uri}}</span>",
+                                    "    <h3>Constants using this unit:</h3>",
+                                    "    {{#each response.constants}}",
+                                    "    <div class=\"constant\">{{name}}</div>",
+                                    "    {{/each}}",
+                                    "</div>",
+                                    "`;",
+                                    "pm.visualizer.set(template, { response: pm.response.json() });"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Concepts",
+            "item": [
+                {
+                    "name": "List All Concepts",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/concepts",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "concepts"
+                            ]
+                        },
+                        "description": "Lists semantic concepts in the CODATA knowledge graph taxonomy."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const template = `",
+                                    "<style>",
+                                    "    body { font-family: sans-serif; padding: 20px; color: #2d3748; }",
+                                    "    .concept { border-left: 4px solid #764ba2; background: #fdfbff; margin-bottom: 10px; padding: 15px; border-radius: 0 8px 8px 0; }",
+                                    "    .name { font-weight: bold; color: #764ba2; font-size: 1.1em; }",
+                                    "    .uri { font-size: 0.8em; color: #cbd5e0; }",
+                                    "</style>",
+                                    "<h2>Semantic Concepts</h2>",
+                                    "{{#each response}}",
+                                    "<div class=\"concept\"><div class=\"name\">{{name}}</div><div class=\"uri\">{{uri}}</div></div>",
+                                    "{{/each}}",
+                                    "`;",
+                                    "pm.visualizer.set(template, { response: pm.response.json() });"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Concept Detail",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/concepts/ElectricConstant",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "concepts",
+                                "ElectricConstant"
+                            ]
+                        },
+                        "description": "Retrieves semantic relationships (broader/narrower) and associated quantities or constants for a concept."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const template = `",
+                                    "<style>",
+                                    "    body { font-family: sans-serif; padding: 30px; background: #fcfaff; }",
+                                    "    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 600px; margin: 0 auto; border-top: 5px solid #764ba2; }",
+                                    "    h1 { color: #2d3748; margin-bottom: 10px; }",
+                                    "    .tag { display: inline-block; background: #f3f0ff; color: #764ba2; padding: 4px 10px; border-radius: 4px; font-size: 0.85em; margin: 0 5px 5px 0; }",
+                                    "    .section { margin-top: 20px; }",
+                                    "    h4 { color: #a0aec0; text-transform: uppercase; font-size: 0.75em; letter-spacing: 0.1em; margin-bottom: 10px; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px; }",
+                                    "</style>",
+                                    "<div class=\"card\">",
+                                    "    <h1>{{response.name}}</h1>",
+                                    "    <div class=\"section\">",
+                                    "        <h4>Broader Concepts</h4>",
+                                    "        {{#each response.broader}}{{#each labels}}<span class=\"tag\">{{value}}</span>{{/each}}{{else}}<small>None</small>{{/each}}",
+                                    "    </div>",
+                                    "    <div class=\"section\">",
+                                    "        <h4>Narrower Concepts</h4>",
+                                    "        {{#each response.narrower}}{{#each labels}}<span class=\"tag\">{{value}}</span>{{/each}}{{else}}<small>None</small>{{/each}}",
+                                    "    </div>",
+                                    "</div>",
+                                    "`;",
+                                    "pm.visualizer.set(template, { response: pm.response.json() });"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Versions",
+            "item": [
+                {
+                    "name": "List All Versions",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/constants/versions",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "constants",
+                                "versions"
+                            ]
+                        },
+                        "description": "Lists all historical release versions of the CODATA recommended values."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const template = `",
+                                    "<style>",
+                                    "    body { font-family: sans-serif; padding: 20px; }",
+                                    "    .v-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }",
+                                    "    .v-item { background: #667eea; color: white; padding: 15px; text-align: center; border-radius: 8px; font-weight: bold; font-size: 1.2em; }",
+                                    "</style>",
+                                    "<h2>Recommended Versions</h2>",
+                                    "<div class=\"v-grid\">{{#each response}}<div class=\"v-item\">{{id}}</div>{{/each}}</div>",
+                                    "`;",
+                                    "pm.visualizer.set(template, { response: pm.response.json() });"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Version Detail",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/constants/versions/2022",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "constants",
+                                "versions",
+                                "2022"
+                            ]
+                        },
+                        "description": "Retrieves all constants and their values as they appeared in a specific release version."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const template = `",
+                                    "<style>",
+                                    "    body { font-family: sans-serif; padding: 20px; }",
+                                    "    table { width: 100%; border-collapse: collapse; }",
+                                    "    th { background: #667eea; color: white; padding: 12px; text-align: left; }",
+                                    "    td { border-bottom: 1px solid #edf2f7; padding: 12px; }",
+                                    "</style>",
+                                    "<h2>CODATA Recommended Values: {{response.id}}</h2>",
+                                    "<table>",
+                                    "    <thead><tr><th>Constant</th><th>Value</th></tr></thead>",
+                                    "    <tbody>",
+                                    "        {{#each response.constants}}",
+                                    "        <tr><td>{{name}}</td><td><code>{{value}}</code></td></tr>",
+                                    "        {{/each}}",
+                                    "    </tbody>",
+                                    "</table>",
+                                    "`;",
+                                    "pm.visualizer.set(template, { response: pm.response.json() });"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "SPARQL",
+            "item": [
+                {
+                    "name": "Select All Triples",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/sparql?query=SELECT * WHERE { ?s ?p ?o } LIMIT 10",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "sparql"
+                            ],
+                            "query": [
+                                {
+                                    "key": "query",
+                                    "value": "SELECT * WHERE { ?s ?p ?o } LIMIT 10"
+                                }
+                            ]
+                        },
+                        "description": "A basic query to retrieve the first 10 triples in the graph."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "List Exact Constants",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/sparql?query=PREFIX codata: <https://w3id.org/codata/model/>\nSELECT ?name ?value WHERE {\n  ?constant a codata:Constant ;\n            codata:prefLabel ?name ;\n            codata:latestValue ?v .\n  ?v codata:value ?value ;\n     codata:isExact true .\n}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "sparql"
+                            ],
+                            "query": [
+                                {
+                                    "key": "query",
+                                    "value": "PREFIX codata: <https://w3id.org/codata/model/>\nSELECT ?name ?value WHERE {\n  ?constant a codata:Constant ;\n            codata:prefLabel ?name ;\n            codata:latestValue ?v .\n  ?v codata:value ?value ;\n     codata:isExact true .\n}"
+                                }
+                            ]
+                        },
+                        "description": "Finds all physical constants that have an exact value (uncertainty = 0)."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Historical Values (Planck Constant)",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/sparql?query=PREFIX codata: <https://w3id.org/codata/model/>\nSELECT ?version ?value WHERE {\n  <https://w3id.org/codata/constants/PlanckConstant> codata:historicalValue ?v .\n  ?v codata:value ?value ;\n     codata:versionId ?version .\n} ORDER BY DESC(?version)",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "sparql"
+                            ],
+                            "query": [
+                                {
+                                    "key": "query",
+                                    "value": "PREFIX codata: <https://w3id.org/codata/model/>\nSELECT ?version ?value WHERE {\n  <https://w3id.org/codata/constants/PlanckConstant> codata:historicalValue ?v .\n  ?v codata:value ?value ;\n     codata:versionId ?version .\n} ORDER BY DESC(?version)"
+                                }
+                            ]
+                        },
+                        "description": "Retrieves the history of recommended values for the Planck constant across different CODATA versions."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Constants per Quantity",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/sparql?query=PREFIX codata: <https://w3id.org/codata/model/>\nSELECT ?quantityName (COUNT(?constant) AS ?count) WHERE {\n  ?constant a codata:Constant ;\n            codata:quantity ?q .\n  ?q codata:prefLabel ?quantityName .\n} GROUP BY ?quantityName ORDER BY DESC(?count)",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "sparql"
+                            ],
+                            "query": [
+                                {
+                                    "key": "query",
+                                    "value": "PREFIX codata: <https://w3id.org/codata/model/>\nSELECT ?quantityName (COUNT(?constant) AS ?count) WHERE {\n  ?constant a codata:Constant ;\n            codata:quantity ?q .\n  ?q codata:prefLabel ?quantityName .\n} GROUP BY ?quantityName ORDER BY DESC(?count)"
+                                }
+                            ]
+                        },
+                        "description": "Aggregates physical constants by their physical quantity and counts them."
+                    },
+                    "response": []
+                }
+            ],
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "exec": [
+                            "const template = `",
+                            "<style>",
+                            "    table { width: 100%; border-collapse: collapse; font-family: sans-serif; }",
+                            "    th { background: #2d3748; color: white; padding: 10px; text-align: left; font-size: 0.9em; }",
+                            "    td { border: 1px solid #e2e8f0; padding: 10px; font-size: 0.85em; }",
+                            "    .uri { color: #667eea; font-size: 0.8em; font-weight: 500; }",
+                            "    h2 { color: #2d3748; padding-bottom: 10px; border-bottom: 2px solid #667eea; }",
+                            "</style>",
+                            "<h2>SPARQL Results</h2>",
+                            "<table>",
+                            "    <thead>",
+                            "        <tr>{{#each response.head.vars}}<th>{{this}}</th>{{/each}}</tr>",
+                            "    </thead>",
+                            "    <tbody>",
+                            "        {{#each response.results.bindings}}",
+                            "        <tr>",
+                            "            {{#each ../response.head.vars}}",
+                            "            {{#with (lookup .. this)}}",
+                            "            <td>",
+                            "                {{#if (eq type \"uri\")}}<span class=\"uri\">{{value}}</span>{{else}}{{value}}{{/if}}",
+                            "            </td>",
+                            "            {{/with}}",
+                            "            {{/each}}",
+                            "        </tr>",
+                            "        {{/each}}",
+                            "    </tbody>",
+                            "</table>",
+                            "`;",
+                            "",
+                            "Handlebars.registerHelper('eq', function (a, b) { return a === b; });",
+                            "pm.visualizer.set(template, { response: pm.response.json() });"
+                        ],
+                        "type": "text/javascript"
+                    }
+                }
+            ],
+            "description": "Popular SPARQL query examples for the CODATA knowledge graph."
+        },
+        {
+            "name": "Content Negotiation",
+            "item": [
+                {
+                    "name": "Get Constant (JSON-LD)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/ld+json",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/constants/PlanckConstant",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "constants",
+                                "PlanckConstant"
+                            ]
+                        },
+                        "description": "Example of retrieving a resource in JSON-LD format using the 'Accept' header."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Constant (Turtle RDF)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "text/turtle",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/constants/PlanckConstant",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "constants",
+                                "PlanckConstant"
+                            ]
+                        },
+                        "description": "Example of retrieving a resource in Turtle RDF format using the 'Accept' header."
+                    },
+                    "response": []
+                }
+            ],
+            "description": "Examples demonstrating RDF content negotiation using headers."
+        }
+    ],
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "https://api.codata.org/drum",
+            "type": "string"
+        }
+    ]
+}
