@@ -15,13 +15,35 @@
             {% if resource.value %}
             <dt>Value:</dt>
             <dd property="schema:value"><code id="value-{{ resource.id }}">{{ resource.value.value }}</code> <button
-                    type="button" onclick="copyToClipboard('value-{{ resource.id }}')" class="copy-btn" title="Copy to clipboard">📋</button>
+                    type="button" onclick="copyToClipboard('value-{{ resource.id }}')" class="copy-btn"
+                    title="Copy to clipboard">📋</button>
             </dd>
 
+            {% if resource.value.valueDecimal %}
+            <dt>Value (Decimal):</dt>
+            <dd><code>{{ resource.value.valueDecimal }}</code></dd>
+            {% endif %}
+
+            {% if resource.value.valueFloat %}
+            <dt>Value (Float):</dt>
+            <dd><code>{{ resource.value.valueFloat }}</code></dd>
+            {% endif %}
+
             <dt>Uncertainty:</dt>
-            <dd><code id="uncertainty-{{ resource.id }}">{{ resource.value.uncertainty }}</code> <button
-                    type="button" onclick="copyToClipboard('uncertainty-{{ resource.id }}')" class="copy-btn" title="Copy to clipboard">📋</button>
+            <dd><code id="uncertainty-{{ resource.id }}">{{ resource.value.uncertainty or '—' }}</code> <button
+                    type="button" onclick="copyToClipboard('uncertainty-{{ resource.id }}')" class="copy-btn"
+                    title="Copy to clipboard">📋</button>
             </dd>
+
+            {% if resource.value.uncertaintyDecimal %}
+            <dt>Uncertainty (Decimal):</dt>
+            <dd><code>{{ resource.value.uncertaintyDecimal }}</code></dd>
+            {% endif %}
+
+            {% if resource.value.uncertaintyFloat %}
+            <dt>Uncertainty (Float):</dt>
+            <dd><code>{{ resource.value.uncertaintyFloat }}</code></dd>
+            {% endif %}
 
             <dt>Version:</dt>
             <dd><code>{{ resource.value.versionId }}</code></dd>
@@ -78,8 +100,14 @@
                 {% for value in resource.historicalValues %}
                 <tr style="border-top: 1px solid #dee2e6;">
                     <td style="padding: 0.5rem;">{{ value.versionId }}</td>
-                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;"><span id="hist-value-{{ value.versionId }}">{{ value.value }}</span> <button type="button" onclick="copyToClipboard('hist-value-{{ value.versionId }}')" class="copy-btn" title="Copy to clipboard">📋</button></td>
-                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;"><span id="hist-uncertainty-{{ value.versionId }}">{{ value.uncertainty }}</span> <button type="button" onclick="copyToClipboard('hist-uncertainty-{{ value.versionId }}')" class="copy-btn" title="Copy to clipboard">📋</button></td>
+                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;"><span
+                            id="hist-value-{{ value.versionId }}">{{ value.value }}</span> <button type="button"
+                            onclick="copyToClipboard('hist-value-{{ value.versionId }}')" class="copy-btn"
+                            title="Copy to clipboard">📋</button></td>
+                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;"><span
+                            id="hist-uncertainty-{{ value.versionId }}">{{ value.uncertainty or '—' }}</span> <button
+                            type="button" onclick="copyToClipboard('hist-uncertainty-{{ value.versionId }}')"
+                            class="copy-btn" title="Copy to clipboard">📋</button></td>
 
                     <td style="padding: 0.5rem; text-align: center;">
                         {% if value.isExact %}✓{% else %}—{% endif %}

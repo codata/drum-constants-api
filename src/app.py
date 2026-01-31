@@ -19,6 +19,13 @@ from contextlib import asynccontextmanager
 import json
 import time
 import hashlib
+from rdflib.plugin import register
+from rdflib.serializer import Serializer
+
+# Register custom high-precision serializers
+register('turtle-hp', Serializer, 'src.serializer', 'HighPrecisionTurtleSerializer')
+register('n3-hp', Serializer, 'src.serializer', 'HighPrecisionN3Serializer')
+register('trig-hp', Serializer, 'src.serializer', 'HighPrecisionTrigSerializer')
 
 
 # Configure logging to stderr with INFO level
@@ -270,15 +277,19 @@ def format_sparql_results(results, accept: str = ""):
     else:
         # CONSTRUCT or DESCRIBE query - return as RDF
         result_graph = Graph()
+        # Bind namespaces from the main graph for consistent serialization
+        for prefix, namespace in graph.namespace_manager.namespaces():
+            result_graph.bind(prefix, namespace)
+            
         for triple in results:
             result_graph.add(triple)
 
         if "text/turtle" in accept:
             return Response(
-                result_graph.serialize(format="turtle"), media_type="text/turtle"
+                result_graph.serialize(format="turtle-hp"), media_type="text/turtle"
             )
         if "application/n3" in accept or "text/n3" in accept:
-            return Response(result_graph.serialize(format="n3"), media_type="text/n3")
+            return Response(result_graph.serialize(format="n3-hp"), media_type="text/n3")
         if "application/ld+json" in accept:
             return Response(
                 result_graph.serialize(format="json-ld"),
@@ -286,7 +297,7 @@ def format_sparql_results(results, accept: str = ""):
             )
         # Default: Turtle
         return Response(
-            result_graph.serialize(format="turtle"), media_type="text/turtle"
+            result_graph.serialize(format="turtle-hp"), media_type="text/turtle"
         )
 
 
@@ -343,24 +354,11 @@ def build_sparql_query(query: str) -> str:
     Returns:
         Complete SPARQL query string with all prefixes prepended
     """
-    prefixes = f"""
-PREFIX codata: <{str(MODEL)}>
-PREFIX concept: <{str(CONCEPT)}>
-PREFIX constant: <{str(CONSTANT)}>
-PREFIX quantity: <{str(QUANTITY)}>
-PREFIX unit: <{str(UNIT)}>
-PREFIX version: <{str(VERSION)}>
-PREFIX dcterms: <{str(DCTERMS)}>
-PREFIX schema: <{str(SCHEMA)}>
-PREFIX qudt: <{str(QUDT)}>
-PREFIX ucum: <{str(UCUM)}>
-PREFIX si-constant: <{str(SICONSTANT)}>
-PREFIX si-unit: <{str(SIUNIT)}>
-PREFIX skos: <{str(SKOS)}>
-PREFIX wikidata: <{str(WIKIDATA)}>
-PREFIX xsd: <{str(XSD)}>
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-"""
+    # Use the same prefixes bound to the graph for consistency with serializers
+    prefixes = ""
+    for p, n in graph.namespace_manager.namespaces():
+        if p:
+            prefixes += f"PREFIX {p}: <{n}>\n"
     return prefixes + "\n" + query.strip()
 
 
@@ -435,6 +433,10 @@ def negotiate_content(uri: str, request: Request, json_response: JSONResponse,
         query = build_sparql_query(query)
         result_graph = run_sparql_query(query).graph
         
+        # Bind namespaces from the main graph for consistent serialization
+        for prefix, namespace in graph.namespace_manager.namespaces():
+            result_graph.bind(prefix, namespace)
+        
         # Return appropriate RDF format based on Accept header
         if "application/rdf+xml" in accept or "application/xml" in accept:
             return Response(
@@ -446,10 +448,10 @@ def negotiate_content(uri: str, request: Request, json_response: JSONResponse,
             )
         if "text/turtle" in accept:
             return Response(
-                result_graph.serialize(format="turtle"), media_type="text/turtle"
+                result_graph.serialize(format="turtle-hp"), media_type="text/turtle"
             )
         if "application/n3" in accept or "text/n3" in accept:
-            return Response(result_graph.serialize(format="n3"), media_type="text/n3")
+            return Response(result_graph.serialize(format="n3-hp"), media_type="text/n3")
         if "application/ld+json" in accept:
             return Response(
                 result_graph.serialize(format="json-ld"),
@@ -457,11 +459,11 @@ def negotiate_content(uri: str, request: Request, json_response: JSONResponse,
             )
         if "application/trig" in accept:
             return Response(
-                result_graph.serialize(format="trig"), media_type="application/trig"
+                result_graph.serialize(format="trig-hp"), media_type="application/trig"
             )
         # Default: Turtle
         return Response(
-            result_graph.serialize(format="turtle"), media_type="text/turtle"
+            result_graph.serialize(format="turtle-hp"), media_type="text/turtle"
         )
     
     # Default: Return JSON
@@ -854,7 +856,7 @@ async def constants(request: Request):
     """Retrieve all constants using SPARQL and return as structured data."""
     try:
         query = """
-            SELECT ?uri ?label ?quantityUri ?quantityLabel ?valueUri ?value ?uncertainty ?versionId ?unitUri
+            SELECT ?uri ?label ?quantityUri ?quantityLabel ?valueUri ?value ?uncertainty ?valueDecimal ?valueFloat ?uncertaintyDecimal ?uncertaintyFloat ?versionId ?unitUri
             WHERE {
                 ?uri a codata:Constant ;
                     skos:prefLabel ?label .
@@ -872,6 +874,10 @@ async def constants(request: Request):
                     ?valueUri codata:value ?value ;
                               codata:versionId ?versionId .
                     OPTIONAL { ?valueUri codata:uncertainty ?uncertainty }
+                    OPTIONAL { ?valueUri codata:valueDecimal ?valueDecimal }
+                    OPTIONAL { ?valueUri codata:valueFloat ?valueFloat }
+                    OPTIONAL { ?valueUri codata:uncertaintyDecimal ?uncertaintyDecimal }
+                    OPTIONAL { ?valueUri codata:uncertaintyFloat ?uncertaintyFloat }
                 }
             }
             ORDER BY ?label DESC(?versionId)
@@ -917,8 +923,12 @@ async def constants(request: Request):
                 latest_value = ConstantValue(
                     uri=value_uri,
                     id=value_id,
-                    value=Decimal(str(row.value)),
-                    uncertainty=Decimal(str(row.uncertainty)) if row.uncertainty else Decimal("0"),
+                    value=str(row.value),
+                    uncertainty=str(row.uncertainty) if row.uncertainty else None,
+                    valueDecimal=Decimal(str(row.valueDecimal)) if row.valueDecimal else None,
+                    valueFloat=float(row.valueFloat) if row.valueFloat else None,
+                    uncertaintyDecimal=Decimal(str(row.uncertaintyDecimal)) if row.uncertaintyDecimal else None,
+                    uncertaintyFloat=float(row.uncertaintyFloat) if row.uncertaintyFloat else None,
                     versionId=version_id,
                 )
             
@@ -1130,7 +1140,7 @@ async def constant(id: str, request: Request):
 
         # Query for all ConstantValues that reference this constant via dcterms:isVersionOf
         values_query = f"""
-            SELECT ?valueUri ?val ?uncertainty ?isExact ?isTruncated ?versionId ?versionUri
+            SELECT ?valueUri ?val ?uncertainty ?valueDecimal ?valueFloat ?uncertaintyDecimal ?uncertaintyFloat ?isExact ?isTruncated ?versionId ?versionUri
             WHERE {{
                 ?valueUri a codata:ConstantValue ;
                     dcterms:isVersionOf <{uri}> ;
@@ -1140,6 +1150,10 @@ async def constant(id: str, request: Request):
                     codata:versionId ?versionId ;
                     codata:hasVersion ?versionUri .
                 OPTIONAL {{ ?valueUri codata:uncertainty ?uncertainty }}
+                OPTIONAL {{ ?valueUri codata:valueDecimal ?valueDecimal }}
+                OPTIONAL {{ ?valueUri codata:valueFloat ?valueFloat }}
+                OPTIONAL {{ ?valueUri codata:uncertaintyDecimal ?uncertaintyDecimal }}
+                OPTIONAL {{ ?valueUri codata:uncertaintyFloat ?uncertaintyFloat }}
             }}
             ORDER BY DESC(?versionId)
             """
@@ -1158,8 +1172,12 @@ async def constant(id: str, request: Request):
             cv = ConstantValue(
                 id=value_id,
                 uri=value_uri,
-                value=Decimal(str(row.val)),
-                uncertainty=Decimal(str(row.uncertainty)) if hasattr(row, 'uncertainty') and row.uncertainty else None,
+                value=str(row.val),
+                uncertainty=str(row.uncertainty) if hasattr(row, 'uncertainty') and row.uncertainty else None,
+                valueDecimal=Decimal(str(row.valueDecimal)) if hasattr(row, 'valueDecimal') and row.valueDecimal else None,
+                valueFloat=float(row.valueFloat) if hasattr(row, 'valueFloat') and row.valueFloat else None,
+                uncertaintyDecimal=Decimal(str(row.uncertaintyDecimal)) if hasattr(row, 'uncertaintyDecimal') and row.uncertaintyDecimal else None,
+                uncertaintyFloat=float(row.uncertaintyFloat) if hasattr(row, 'uncertaintyFloat') and row.uncertaintyFloat else None,
                 isExact=bool(row.isExact),
                 isTruncated=bool(row.isTruncated),
                 versionId=str(row.versionId),
@@ -1208,7 +1226,7 @@ async def constant_value(id: str, versionId: str, request: Request):
         
         # SPARQL query to get the specific ConstantValue for this constant and version
         query = f"""
-            SELECT ?valueUri ?val ?uncertainty ?isExact ?isTruncated ?label ?quantity ?unit
+            SELECT ?valueUri ?val ?uncertainty ?valueDecimal ?valueFloat ?uncertaintyDecimal ?uncertaintyFloat ?isExact ?isTruncated ?label ?quantity ?unit
             WHERE {{
                 ?valueUri a codata:ConstantValue ;
                     dcterms:isVersionOf <{constant_uri}> ;
@@ -1217,6 +1235,10 @@ async def constant_value(id: str, versionId: str, request: Request):
                     codata:isTruncated ?isTruncated ;
                     codata:hasVersion <{version_uri}> .
                 OPTIONAL {{ ?valueUri codata:uncertainty ?uncertainty }}
+                OPTIONAL {{ ?valueUri codata:valueDecimal ?valueDecimal }}
+                OPTIONAL {{ ?valueUri codata:valueFloat ?valueFloat }}
+                OPTIONAL {{ ?valueUri codata:uncertaintyDecimal ?uncertaintyDecimal }}
+                OPTIONAL {{ ?valueUri codata:uncertaintyFloat ?uncertaintyFloat }}
                 OPTIONAL {{ <{constant_uri}> skos:prefLabel ?label }}
                 OPTIONAL {{ <{constant_uri}> codata:hasQuantity ?quantity }}
                 OPTIONAL {{ <{constant_uri}> codata:hasUnit ?unit }}
@@ -1254,8 +1276,12 @@ async def constant_value(id: str, versionId: str, request: Request):
         constant_value_obj = ConstantValue(
             id=value_id,
             uri=value_uri,
-            value=Decimal(str(first.val)),  # type: ignore
-            uncertainty=Decimal(str(first.uncertainty)) if hasattr(first, 'uncertainty') and first.uncertainty else None,  # type: ignore
+            value=str(first.val),  # type: ignore
+            uncertainty=str(first.uncertainty) if hasattr(first, 'uncertainty') and first.uncertainty else None,  # type: ignore
+            valueDecimal=Decimal(str(first.valueDecimal)) if hasattr(first, 'valueDecimal') and first.valueDecimal else None,  # type: ignore
+            valueFloat=float(first.valueFloat) if hasattr(first, 'valueFloat') and first.valueFloat else None,  # type: ignore
+            uncertaintyDecimal=Decimal(str(first.uncertaintyDecimal)) if hasattr(first, 'uncertaintyDecimal') and first.uncertaintyDecimal else None,  # type: ignore
+            uncertaintyFloat=float(first.uncertaintyFloat) if hasattr(first, 'uncertaintyFloat') and first.uncertaintyFloat else None,  # type: ignore
             isExact=bool(first.isExact),  # type: ignore
             isTruncated=bool(first.isTruncated),  # type: ignore
             versionId=versionId,

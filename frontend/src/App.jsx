@@ -15,7 +15,7 @@ function App() {
   const fetchConstants = useCallback(async (query = '') => {
     setLoading(true)
     try {
-      const url = query 
+      const url = query
         ? `${API_BASE}/constants?q=${encodeURIComponent(query)}`
         : `${API_BASE}/constants`
       const response = await fetch(url, {
@@ -42,14 +42,14 @@ function App() {
       n3: 'text/n3',
       jsonld: 'application/ld+json'
     }
-    
+
     try {
       const response = await fetch(`${API_BASE}/constants/${symbol}`, {
         headers: { 'Accept': mimeTypes[format] }
       })
       const text = await response.text()
       setRawResponse(text)
-      
+
       if (format === 'json') {
         setSelectedConstant(JSON.parse(text))
       } else {
@@ -94,8 +94,8 @@ function App() {
             <h2>Constants {loading && '(loading...)'}</h2>
             <ul>
               {constants.map((c) => (
-                <li 
-                  key={c.symbol} 
+                <li
+                  key={c.symbol}
                   onClick={() => fetchConstantDetail(c.symbol)}
                   className={selectedConstant?.symbol === c.symbol ? 'selected' : ''}
                 >
@@ -126,19 +126,24 @@ function App() {
             {selectedConstant && (
               <div className="detail-content">
                 <h2>
-                  {selectedConstant.raw 
-                    ? `${selectedConstant.symbol} (${format})` 
+                  {selectedConstant.raw
+                    ? `${selectedConstant.symbol} (${format})`
                     : `${selectedConstant.name} (${selectedConstant.symbol})`
                   }
                 </h2>
-                
+
                 {!selectedConstant.raw && format === 'json' && (
                   <div className="detail-card">
                     <p><strong>Value:</strong> {selectedConstant.value}</p>
-                    <p><strong>Unit:</strong> {selectedConstant.unit}</p>
+                    {selectedConstant.valueDecimal && <p><strong>Value (Decimal):</strong> {selectedConstant.valueDecimal}</p>}
+                    {selectedConstant.valueFloat && <p><strong>Value (Float):</strong> {selectedConstant.valueFloat}</p>}
+                    <p><strong>Uncertainty:</strong> {selectedConstant.uncertainty || '—'}</p>
+                    {selectedConstant.uncertaintyDecimal && <p><strong>Uncertainty (Decimal):</strong> {selectedConstant.uncertaintyDecimal}</p>}
+                    {selectedConstant.uncertaintyFloat && <p><strong>Uncertainty (Float):</strong> {selectedConstant.uncertaintyFloat}</p>}
+                    <p><strong>Unit:</strong> {selectedConstant.unit || '—'}</p>
                   </div>
                 )}
-                
+
                 <div className="raw-response">
                   <h3>Raw API Response:</h3>
                   <pre>{rawResponse}</pre>
@@ -147,10 +152,10 @@ function App() {
                 <div className="api-example">
                   <h3>Try it yourself:</h3>
                   <code>
-                    curl -H "Accept: {format === 'json' ? 'application/json' : 
-                      format === 'html' ? 'text/html' : 
-                      format === 'turtle' ? 'text/turtle' : 
-                      format === 'n3' ? 'text/n3' : 'application/ld+json'}" \<br/>
+                    curl -H "Accept: {format === 'json' ? 'application/json' :
+                      format === 'html' ? 'text/html' :
+                        format === 'turtle' ? 'text/turtle' :
+                          format === 'n3' ? 'text/n3' : 'application/ld+json'}" \<br />
                     &nbsp;&nbsp;{API_BASE}/constants/{selectedConstant.symbol}
                   </code>
                 </div>
@@ -169,7 +174,7 @@ function App() {
 
       <footer>
         <p>
-          API Documentation: <a href={`${API_BASE}/docs`} target="_blank">/docs</a> | 
+          API Documentation: <a href={`${API_BASE}/docs`} target="_blank">/docs</a> |
           <a href={`${API_BASE}/redoc`} target="_blank">/redoc</a>
         </p>
       </footer>

@@ -4,7 +4,7 @@ from typing import Annotated, Optional
 from pydantic import BaseModel, Field, PlainSerializer, model_validator
 
 # Serialize Decimal as string to preserve exact precision
-DecimalStr = Annotated[Decimal, PlainSerializer(lambda x: str(x), return_type=str)]
+DecimalStr = Annotated[Decimal, PlainSerializer(lambda x: format(x, 'f'), return_type=str)]
 
 # Serialize date as ISO format string
 DateStr = Annotated[date, PlainSerializer(lambda x: x.isoformat(), return_type=str)]
@@ -46,9 +46,13 @@ class Version(Resource):
     constants: Optional[list["Constant"]] = None
 
 class ConstantValue(Resource):
-    value: DecimalStr
     versionId: str
-    uncertainty: Optional[DecimalStr] = None
+    value: str
+    valueDecimal: Optional[DecimalStr] = None
+    valueFloat: Optional[float] = None
+    uncertainty: Optional[str] = None
+    uncertaintyDecimal: Optional[DecimalStr] = None
+    uncertaintyFloat: Optional[float] = None
     isExact: Optional[bool] = None
     isTruncated: Optional[bool] = None
     version: Optional[Version] = None
