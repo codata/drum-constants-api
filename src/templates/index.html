@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}Home - CODATA Fundamental Physical Constants{% endblock %}
+
+{% block format_links %}{# Hide format links on root page #}{% endblock %}
+
+{% block extra_head %}
+<style>
+    :root {
+        --primary: #667eea;
+        --secondary: #764ba2;
+        --bg-subtle: #f8f9ff;
+    }
+
+    .hero {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+        border-radius: 16px;
+        margin-bottom: 3rem;
+        border: 1px solid rgba(102, 126, 234, 0.1);
+    }
+
+    .hero h2 {
+        font-size: 2.8rem;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 1.5rem;
+        font-weight: 800;
+    }
+
+    .hero p {
+        font-size: 1.25rem;
+        color: #555;
+        max-width: 800px;
+        margin: 0 auto;
+        line-height: 1.6;
+    }
+
+    .welcome-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+        margin-bottom: 4rem;
+    }
+
+    .card {
+        padding: 2rem;
+        background: white;
+        border: 1px solid #edf2f7;
+        border-radius: 12px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        overflow: hidden;
+        text-decoration: none;
+        /* Ensure links don't have underlines */
+        color: inherit;
+        /* Inherit text color */
+    }
+
+    .card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: linear-gradient(to right, var(--primary), var(--secondary));
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 24px rgba(102, 126, 234, 0.15);
+        border-color: rgba(102, 126, 234, 0.3);
+    }
+
+    .card:hover::before {
+        opacity: 1;
+    }
+
+    .card h3 {
+        color: #2d3748;
+        margin-bottom: 1rem;
+        font-size: 1.4rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .card p {
+        color: #718096;
+        font-size: 1rem;
+        line-height: 1.5;
+        flex-grow: 1;
+    }
+
+    .card .icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(102, 126, 234, 0.1);
+        border-radius: 8px;
+        font-size: 1.25rem;
+    }
+
+    .api-section {
+        background: #2d3748;
+        color: white;
+        padding: 3rem;
+        border-radius: 16px;
+        margin-top: 2rem;
+    }
+
+    .api-section h3 {
+        color: #a0aec0;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .api-section h4 {
+        font-size: 1.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .code-snippet {
+        background: #1a202c;
+        padding: 1.5rem;
+        border-radius: 8px;
+        font-family: 'Fira Code', 'Courier New', monospace;
+        color: #e2e8f0;
+        margin-top: 1.5rem;
+        border: 1px solid #4a5568;
+    }
+
+    .code-snippet span {
+        color: #667eea;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h2>CODATA FUNDAMENTAL CONSTANTS API</h2>
+    <p>A semantic gateway to the physical fundamental constants. Built for science, designed for
+        discovery and machine actionability.</p>
+    <p style="margin-top: 1.5rem; font-size: 1rem; opacity: 0.8;">
+        Supported by the <a href="https://codata.org/initiatives/task-groups/drum/" target="_blank"
+            style="color: var(--primary); font-weight: 600;">CODATA Digital Representation of Units of Measurement
+            (DRUM) Task Group</a>.
+    </p>
+</div>
+
+<div class="welcome-grid">
+    <a href="{{ root_path }}/constants" class="card">
+        <h3>
+            <div class="icon">⚛️</div> Constants
+        </h3>
+        <p>Comprehensive repository of physical constants with detailed version history and high-precision values.</p>
+    </a>
+
+    <a href="{{ root_path }}/quantities" class="card">
+        <h3>
+            <div class="icon">📊</div> Quantities
+        </h3>
+        <p>Explore relationships between constants through physical quantities like energy, frequency, and mass.</p>
+    </a>
+
+    <a href="{{ root_path }}/units" class="card">
+        <h3>
+            <div class="icon">📏</div> Units
+        </h3>
+        <p>Browse measurement systems and unit definitions associated with the fundamental constants.</p>
+    </a>
+
+    <a href="{{ root_path }}/concepts" class="card">
+        <h3>
+            <div class="icon">🧠</div> Concepts
+        </h3>
+        <p>Semantic taxonomy connecting physical concepts across the CODATA knowledge graph.</p>
+    </a>
+
+    <a href="{{ root_path }}/constants/versions" class="card">
+        <h3>
+            <div class="icon">⏳</div> Versions
+        </h3>
+        <p>Access recommended values from 1998 to the present day, tracking the evolution of measurement.</p>
+    </a>
+
+    <a href="{{ root_path }}/playground" class="card">
+        <h3>
+            <div class="icon">🛠️</div> Playground
+        </h3>
+        <p>Interactive tool for exploring the API, visualizing results, and testing semantic queries.</p>
+    </a>
+</div>
+
+<div class="api-section">
+    <h3>Developer Reference</h3>
+    <h4>Semantic Linked Data</h4>
+    <p>This repository implements 100% semantic linked data principles. Every entity is a URL-resolvable resource
+        supporting multiple serialization formats.</p>
+    <div class="code-snippet">
+        curl -H <span>"Accept: text/turtle"</span> https://api.codata.org/drum/constants/PlanckConstant
+    </div>
+
+    <h4 style="margin-top: 2.5rem;">Interactive Documentation</h4>
+    <p>Explore and test the API endpoints using our interactive OpenAPI documentation.</p>
+    <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+        <a href="{{ root_path }}/docs" target="_blank"
+            style="background: var(--primary); color: white; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; text-decoration: none;">Swagger
+            UI</a>
+        <a href="{{ root_path }}/redoc" target="_blank"
+            style="background: transparent; color: white; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; text-decoration: none; border: 1px solid rgba(255,255,255,0.2);">Redoc</a>
+    </div>
+</div>
+{% endblock %}

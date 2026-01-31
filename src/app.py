@@ -471,8 +471,23 @@ def negotiate_content(uri: str, request: Request, json_response: JSONResponse,
 
 
 @app.get("/")
-async def index():
-    return {"message": "Welcome to CODATA DRUM Physical Fundamental Constants API!"}
+async def index(request: Request):
+    """API Landing page with HTML support."""
+    # Check for format query parameter
+    format_param = request.query_params.get("format", "").lower()
+    accept = request.headers.get("accept", "application/json")
+    
+    if format_param == "json" or ("text/html" not in accept and "application/xhtml+xml" not in accept):
+        return {"message": "Welcome to CODATA DRUM Physical Fundamental Constants API!"}
+    
+    # Return HTML index page
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "message": "Welcome to CODATA DRUM Physical Fundamental Constants API!"
+        }
+    )
 
 
 @app.get("/concepts")
