@@ -170,6 +170,18 @@ uv run pytest
 uv run pytest -v
 ```
 
+## Data Management
+
+### Synchronizing Data
+
+To sync the RDF data with the latest version from the [CODATA DRUM Constants](https://github.com/codata/drum-constants) repository:
+
+```bash
+uv run sync-data
+```
+
+This will download the latest `codata-constants.ttl` and update `src/data/codata_constants.ttl`.
+
 ## Production Deployment
 
 ### Using Uvicorn with Workers

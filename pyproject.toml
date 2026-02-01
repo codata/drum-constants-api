@@ -16,6 +16,9 @@ dependencies = [
     "pydantic-settings",
 ]
 
+[project.scripts]
+sync-data = "scripts.sync_data:sync_data"
+
 [project.optional-dependencies]
 dev = ["pytest", "requests", "httpx"]
 
