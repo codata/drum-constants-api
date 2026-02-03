@@ -1,4 +1,4 @@
-# Drum API
+# DRUM Constants API
 
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](code_of_conduct.md)
 
@@ -217,6 +217,20 @@ Then access at: `http://localhost:8000/drum-api/`
 ```nginx
 location /drum-api/ {
     proxy_pass http://localhost:8000/;
+    proxy_set_header X-Forwarded-Prefix /drum-api;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+**Method 2b: Behind Nginx (Dynamic - defined once)**
+
+```nginx
+location ~ ^/(?<prefix>drum-api)(/.*)?$ {
+    proxy_pass http://localhost:8000;
+    proxy_set_header X-Forwarded-Prefix /$prefix;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
