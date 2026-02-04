@@ -20,6 +20,7 @@ class Resource(BaseModel):
 
 class Concept(Resource):
     name: str
+    isQuantity: Optional[bool] = None
     broader: Optional[list["Concept"]] = None
     parts: Optional[list["Concept"]] = None
     quantities: Optional[list["Quantity"]] = None

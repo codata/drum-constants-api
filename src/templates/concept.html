@@ -6,30 +6,55 @@
 <article typeof="skos:Concept">
     <h2 property="skos:prefLabel">{{ resource.name }}</h2>
     <p class="uri" property="@id">{{ resource.uri }}</p>
-    
+
     <div class="metadata">
         <dl>
             <dt>ID:</dt>
             <dd><code>{{ resource.id }}</code></dd>
-            
+
+            <dt>Type:</dt>
+            <dd>
+                <span class="badge {{ 'badge-quantity' if resource.isQuantity else 'badge-concept' }}">
+                    {{ 'Quantity' if resource.isQuantity else 'Concept' }}
+                </span>
+            </dd>
+
+            {% if resource.quantity %}
+            <dt>Corresponding Quantity:</dt>
+            <dd><a href="{{ root_path }}/quantities/{{ resource.quantity.id }}">{{ resource.quantity.name }}</a></dd>
+            {% endif %}
+
+            {% if resource.quantities %}
+            <dt>Related Quantities:</dt>
+            <dd>
+                <ul class="list">
+                    {% for q in resource.quantities %}
+                    <li><a href="{{ root_path }}/quantities/{{ q.id }}">{{ q.name }}</a></li>
+                    {% endfor %}
+                </ul>
+            </dd>
+            {% endif %}
+
             {% if resource.broader %}
             <dt>Broader Concepts:</dt>
             <dd>
                 <ul class="list">
-                {% for broader in resource.broader %}
-                    <li><a href="{{ root_path }}/concepts/{{ broader.id }}" property="skos:broader">{{ broader.name }}</a></li>
-                {% endfor %}
+                    {% for broader in resource.broader %}
+                    <li><a href="{{ root_path }}/concepts/{{ broader.id }}" property="skos:broader">{{ broader.name
+                            }}</a></li>
+                    {% endfor %}
                 </ul>
             </dd>
             {% endif %}
-            
+
             {% if resource.parts %}
             <dt>Has Parts:</dt>
             <dd>
                 <ul class="list">
-                {% for part in resource.parts %}
-                    <li><a href="{{ root_path }}/concepts/{{ part.id }}" property="dcterms:hasPart">{{ part.name }}</a></li>
-                {% endfor %}
+                    {% for part in resource.parts %}
+                    <li><a href="{{ root_path }}/concepts/{{ part.id }}" property="dcterms:hasPart">{{ part.name }}</a>
+                    </li>
+                    {% endfor %}
                 </ul>
             </dd>
             {% endif %}

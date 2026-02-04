@@ -8,18 +8,21 @@
 <article>
     <h2>Concepts</h2>
     <p>Browse all physical constant concepts in the CODATA repository.</p>
-    
+
     <div class="metadata">
         <p><strong>Total Concepts:</strong> <span class="badge">{{ resources|length }}</span></p>
     </div>
-    
+
     <ul class="list">
-    {% for concept in resources %}
+        {% for concept in resources %}
         <li>
             <a href="{{ root_path }}/concepts/{{ concept.id }}">{{ concept.name }}</a>
+            <span class="badge {{ 'badge-quantity' if concept.isQuantity else 'badge-concept' }}">
+                {{ 'Quantity' if concept.isQuantity else 'Concept' }}
+            </span>
             <span class="uri">{{ concept.uri }}</span>
         </li>
-    {% endfor %}
+        {% endfor %}
     </ul>
 </article>
 {% endblock %}

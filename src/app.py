@@ -497,23 +497,14 @@ async def concepts(request: Request):
     This includes both pure Concepts and Quantities (which are also Concepts).
     """
     try:
-        # Query for both Concepts and Quantities (which are also Concepts)
+        # Query for all Concepts and check if they are also Quantities
         query = """
-            SELECT ?uri ?label ?type
+            SELECT ?uri ?label ?isQuantity
             WHERE {
-                {
-                    ?uri a codata:Concept ;
-                        skos:prefLabel ?label .
-                    FILTER (lang(?label) = "" || lang(?label) = "en")
-                    BIND ("Concept" AS ?type)
-                }
-                UNION
-                {
-                    ?uri a codata:Quantity ;
-                        skos:prefLabel ?label .
-                    FILTER (lang(?label) = "" || lang(?label) = "en")
-                    BIND ("Quantity" AS ?type)
-                }
+                ?uri a codata:Concept ;
+                    skos:prefLabel ?label .
+                FILTER (lang(?label) = "" || lang(?label) = "en")
+                BIND (EXISTS { ?uri a codata:Quantity } AS ?isQuantity)
             }
             ORDER BY ?label
             """
@@ -528,10 +519,9 @@ async def concepts(request: Request):
             c_uri = str(row.uri)
             c_id = c_uri.split("/")[-1]
             c_label = str(row.label) if row.label else c_id
-            is_quantity = str(row.type) == "Quantity"
-            concept_dict = Concept(id=c_id, uri=c_uri, name=c_label).model_dump(exclude_none=True)
-            concept_dict["isQuantity"] = is_quantity
-            concepts_list.append(concept_dict)
+            is_quantity = bool(row.isQuantity)
+            concept_obj = Concept(id=c_id, uri=c_uri, name=c_label, isQuantity=is_quantity)
+            concepts_list.append(concept_obj.model_dump(exclude_none=True))
 
         # Check if HTML is requested
         accept = request.headers.get("accept", "")
@@ -566,25 +556,13 @@ async def concept(id: str, request: Request):
         query = f"""
             SELECT ?uri ?label ?part ?broader ?isQuantity
             WHERE {{
-                {{
-                    BIND (<{concept_uri}> AS ?uri)
-                    <{concept_uri}> a codata:Concept ;
-                        skos:prefLabel ?label .
-                    FILTER (lang(?label) = "" || lang(?label) = "en")
-                    OPTIONAL {{ <{concept_uri}> dcterms:hasPart ?part }}
-                    OPTIONAL {{ <{concept_uri}> skos:broader ?broader }}
-                    BIND (false AS ?isQuantity)
-                }}
-                UNION
-                {{
-                    BIND (<{quantity_uri}> AS ?uri)
-                    <{quantity_uri}> a codata:Quantity ;
-                        skos:prefLabel ?label .
-                    FILTER (lang(?label) = "" || lang(?label) = "en")
-                    OPTIONAL {{ <{quantity_uri}> dcterms:hasPart ?part }}
-                    OPTIONAL {{ <{quantity_uri}> skos:broader ?broader }}
-                    BIND (true AS ?isQuantity)
-                }}
+                VALUES ?uri {{ <{concept_uri}> <{quantity_uri}> }}
+                ?uri a codata:Concept ;
+                    skos:prefLabel ?label .
+                FILTER (lang(?label) = "" || lang(?label) = "en")
+                OPTIONAL {{ ?uri dcterms:hasPart ?part }}
+                OPTIONAL {{ ?uri skos:broader ?broader }}
+                BIND (EXISTS {{ ?uri a codata:Quantity }} AS ?isQuantity)
             }}
             """
         query = build_sparql_query(query)
@@ -659,6 +637,7 @@ async def concept(id: str, request: Request):
             id=id,
             uri=uri,
             name=label,
+            isQuantity=is_quantity,
             parts=parts if parts else None,
             broader=broader_concepts if broader_concepts else None,
             quantity=concept_quantity,
