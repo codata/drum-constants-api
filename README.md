@@ -15,7 +15,7 @@ The underlying data is sourced from the [CODATA DRUM Constants](https://github.c
 ## Try It Now
 
 The API is available for testing at:
-**[https://api.codata.org/drum](https://api.codata.org/drum/)**
+**[https://api.codata.org/drum](https://api.codata.org/drum/constants)**
 
 ### Interactive Documentation & Tools
 - **Swagger UI**: `/docs`
