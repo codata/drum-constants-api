@@ -16,7 +16,10 @@
     <ul class="list">
     {% for unit in resources %}
         <li>
-            <a href="{{ root_path }}/units/{{ unit.id }}">{{ unit.name }}</a>
+            <a href="{{ root_path }}/units/{{ unit.id }}"><strong>{{ unit.name }}</strong></a>
+            {% if unit.ucumCode and unit.ucumCode != unit.name %}
+            <span class="badge" style="font-family: monospace;">{{ unit.ucumCode }}</span>
+            {% endif %}
             <span class="uri">{{ unit.uri }}</span>
         </li>
     {% endfor %}

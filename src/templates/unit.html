@@ -12,6 +12,16 @@
             <dt>ID:</dt>
             <dd><code>{{ resource.id }}</code></dd>
             
+            {% if resource.ucumCode %}
+            <dt>UCUM Code:</dt>
+            <dd><code>{{ resource.ucumCode }}</code></dd>
+            {% endif %}
+
+            {% if resource.siExpression %}
+            <dt>SI Expression:</dt>
+            <dd><code>{{ resource.siExpression }}</code></dd>
+            {% endif %}
+            
             {% if resource.identifiers %}
             <dt>Identifiers:</dt>
             <dd>

@@ -2,29 +2,27 @@ import requests
 from pathlib import Path
 import sys
 
-# Raw URL for the CODATA constants TTL file
-SOURCE_URL = "https://raw.githubusercontent.com/codata/drum-constants/main/dist/rdf/codata_constants.ttl"
-TARGET_FILE = Path(__file__).parent.parent / "src" / "data" / "codata_constants.ttl"
+# Raw URLs for the CODATA constants TTL and ontology files
+SOURCE_URLS = {
+    "codata_constants.ttl": "https://raw.githubusercontent.com/codata/drum-constants/main/dist/rdf/codata_constants.ttl",
+    "codata.ttl": "https://raw.githubusercontent.com/codata/drum-constants/main/dist/rdf/codata.ttl",
+}
+DATA_DIR = Path(__file__).parent.parent / "src" / "data"
 
 def sync_data():
-    print(f"Syncing data from {SOURCE_URL}...")
-    try:
-        response = requests.get(SOURCE_URL, timeout=30)
-        response.raise_for_status()
-        
-        # Ensure the target directory exists
-        TARGET_FILE.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Write the content to the file
-        with open(TARGET_FILE, "wb") as f:
-            f.write(response.content)
-            
-        print(f"Successfully updated {TARGET_FILE}")
-        print(f"File size: {len(response.content) / 1024 / 1024:.2f} MB")
-        
-    except Exception as e:
-        print(f"Error syncing data: {e}", file=sys.stderr)
-        sys.exit(1)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    for filename, url in SOURCE_URLS.items():
+        target_file = DATA_DIR / filename
+        print(f"Syncing data from {url}...")
+        try:
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            with open(target_file, "wb") as f:
+                f.write(response.content)
+            print(f"Successfully updated {target_file} ({len(response.content) / 1024:.1f} KB)")
+        except Exception as e:
+            print(f"Error syncing {filename}: {e}", file=sys.stderr)
+            sys.exit(1)
 
 if __name__ == "__main__":
     sync_data()

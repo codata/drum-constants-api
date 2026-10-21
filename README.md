@@ -50,7 +50,7 @@ The API is available for testing at:
 - `GET /constants/versions/{id}` - Get version release information
 
 ### Advanced
-- `GET /sparql` - Direct SPARQL query endpoint (query parameter: `q`)
+- `GET /sparql` - Direct SPARQL query endpoint (query parameter: `query`)
 
 All endpoints support content negotiation via `Accept` header or `?format=` query parameter.
 
@@ -114,19 +114,19 @@ All resource detail endpoints support multiple formats via the `Accept` header o
 Using Accept header:
 ```bash
 # Get speed of light constant as Turtle
-curl -H "Accept: text/turtle" http://localhost:8000/constants/speed-of-light-in-vacuum
+curl -H "Accept: text/turtle" http://localhost:8000/constants/SpeedOfLight
 
 # Get Planck constant as JSON-LD
-curl -H "Accept: application/ld+json" http://localhost:8000/constants/planck-constant
+curl -H "Accept: application/ld+json" http://localhost:8000/constants/PlanckConstant
 ```
 
 Using query parameter:
 ```bash
 # Get speed of light constant as Turtle
-curl http://localhost:8000/constants/speed-of-light-in-vacuum?format=turtle
+curl http://localhost:8000/constants/SpeedOfLight?format=turtle
 
 # Get Planck constant as JSON-LD
-curl http://localhost:8000/constants/planck-constant?format=jsonld
+curl http://localhost:8000/constants/PlanckConstant?format=jsonld
 ```
 
 ### HTML Format Selector
@@ -180,7 +180,7 @@ To sync the RDF data with the latest version from the [CODATA DRUM Constants](ht
 uv run sync-data
 ```
 
-This will download the latest `codata-constants.ttl` and update `src/data/codata_constants.ttl`.
+This will download the latest `codata_constants.ttl` and `codata.ttl` ontology and update `src/data/`.
 
 ## Production Deployment
 
@@ -284,4 +284,4 @@ Please ensure:
 
 ## License
 
-MIT
+Software code is licensed under the [MIT License](LICENSE), while the embedded CODATA RDF knowledge graph and ontology data in `src/data/` are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). See [LICENSING.md](LICENSING.md) for details.

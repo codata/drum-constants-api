@@ -45,6 +45,7 @@ UNIT = Namespace("https://w3id.org/codata/units/")
 VERSION = Namespace("https://w3id.org/codata/constants/versions/")
 
 DCTERMS = Namespace("http://purl.org/dc/terms/")
+OWL = Namespace("http://www.w3.org/2002/07/owl#")
 SCHEMA = Namespace("https://schema.org/")
 QUDT = Namespace("http://qudt.org/vocab/quantitykind/")
 UCUM = Namespace("https://w3id.org/uom/")
@@ -53,6 +54,50 @@ SIUNIT = Namespace("https://si-digital-framework.org/SI/units/")
 SKOS = Namespace("http://www.w3.org/2004/02/skos/core#")
 WIKIDATA = Namespace("https://www.wikidata.org/entity/")
 XSD = Namespace("http://www.w3.org/2001/XMLSchema#")
+
+JSONLD_CONTEXT = {
+    "codata": str(MODEL),
+    "concept": str(CONCEPT),
+    "constant": str(CONSTANT),
+    "quantity": str(QUANTITY),
+    "unit": str(UNIT),
+    "version": str(VERSION),
+    "dcterms": str(DCTERMS),
+    "owl": str(OWL),
+    "qudt": str(QUDT),
+    "schema": str(SCHEMA),
+    "si-constant": str(SICONSTANT),
+    "si-unit": str(SIUNIT),
+    "skos": str(SKOS),
+    "ucum": str(UCUM),
+    "wikidata": str(WIKIDATA),
+    "xsd": str(XSD),
+    "uri": "@id",
+    "id": "schema:identifier",
+    "name": "skos:prefLabel",
+    "value": "codata:value",
+    "valueDecimal": "codata:valueDecimal",
+    "valueFloat": "codata:valueFloat",
+    "uncertainty": "codata:uncertainty",
+    "uncertaintyDecimal": "codata:uncertaintyDecimal",
+    "uncertaintyFloat": "codata:uncertaintyFloat",
+    "nistExponent": "codata:nistExponent",
+    "isExact": "codata:isExact",
+    "isTruncated": "codata:isTruncated",
+    "isDeprecated": "owl:deprecated",
+    "versionId": "codata:versionId",
+    "ucumCode": "ucum:ucum",
+    "siExpression": "ucum:si_expression",
+}
+
+
+def with_jsonld_context(data):
+    """Wrap a dict or list of dicts with the standard JSON-LD @context."""
+    if isinstance(data, dict):
+        return {"@context": JSONLD_CONTEXT, **data}
+    if isinstance(data, list):
+        return {"@context": JSONLD_CONTEXT, "@graph": data}
+    return data
 
 # Global RDF graph - loaded at module level before gunicorn forks workers
 # This way the read-only graph is shared across all worker processes
@@ -85,6 +130,7 @@ ROOT_PATH = os.getenv("ROOT_PATH", "")
 app = FastAPI(
     title=settings.API_TITLE,
     description=settings.API_DESCRIPTION,
+    version="0.4.0",
     lifespan=lifespan,
     root_path=ROOT_PATH,
 )
@@ -224,6 +270,7 @@ def load_rdf_data() -> Graph:
     g.bind("codata", MODEL)
     g.bind("concept", CONCEPT)
     g.bind("constant", CONSTANT)
+    g.bind("owl", OWL)
     g.bind("quantity", QUANTITY)
     g.bind("version", VERSION)
     g.bind("schema", SCHEMA)
@@ -292,7 +339,7 @@ def format_sparql_results(results, accept: str = ""):
             return Response(result_graph.serialize(format="n3-hp"), media_type="text/n3")
         if "application/ld+json" in accept:
             return Response(
-                result_graph.serialize(format="json-ld"),
+                result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT),
                 media_type="application/ld+json",
             )
         # Default: Turtle
@@ -404,8 +451,8 @@ def negotiate_content(uri: str, request: Request, json_response: JSONResponse,
         json_content = json_response.body.decode('utf-8')
         json_data = json.loads(json_content)
         
-        # Pretty-print JSON-LD for embedding
-        json_ld = json.dumps(json_data, indent=2)
+        # Pretty-print JSON-LD for embedding with @context
+        json_ld = json.dumps(with_jsonld_context(json_data), indent=2)
         
         return templates.TemplateResponse(
             request,
@@ -454,7 +501,7 @@ def negotiate_content(uri: str, request: Request, json_response: JSONResponse,
             return Response(result_graph.serialize(format="n3-hp"), media_type="text/n3")
         if "application/ld+json" in accept:
             return Response(
-                result_graph.serialize(format="json-ld"),
+                result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT),
                 media_type="application/ld+json",
             )
         if "application/trig" in accept:
@@ -490,7 +537,7 @@ async def index(request: Request):
     )
 
 
-@app.get("/concepts")
+@app.get("/concepts", response_model=List[Concept], response_model_exclude_none=True)
 async def concepts(request: Request):
     """Retrieve all concepts using SPARQL and return as structured data.
     
@@ -526,7 +573,7 @@ async def concepts(request: Request):
         # Check if HTML is requested
         accept = request.headers.get("accept", "")
         if "text/html" in accept:
-            json_ld = json.dumps(concepts_list, indent=2)
+            json_ld = json.dumps(with_jsonld_context(concepts_list), indent=2)
             return templates.TemplateResponse(
                 request,
                 "concepts.html",
@@ -541,7 +588,7 @@ async def concepts(request: Request):
         raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
 
 
-@app.get("/concepts/{id}")
+@app.get("/concepts/{id}", response_model=Concept, response_model_exclude_none=True)
 async def concept(id: str, request: Request):
     """Retrieve concept information with content negotiation support.
     
@@ -657,7 +704,7 @@ async def concept(id: str, request: Request):
         raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
 
 
-@app.get("/quantities")
+@app.get("/quantities", response_model=List[Quantity], response_model_exclude_none=True)
 async def quantities(request: Request):
     """Retrieve all quantities using SPARQL and return as structured data."""
     try:
@@ -717,7 +764,7 @@ async def quantities(request: Request):
         # Check if HTML is requested
         accept = request.headers.get("accept", "")
         if "text/html" in accept:
-            json_ld = json.dumps(quantities_json, indent=2)
+            json_ld = json.dumps(with_jsonld_context(quantities_json), indent=2)
             return templates.TemplateResponse(
                 request,
                 "quantities.html",
@@ -732,7 +779,7 @@ async def quantities(request: Request):
         raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
 
 
-@app.get("/quantities/{id}")
+@app.get("/quantities/{id}", response_model=Quantity, response_model_exclude_none=True)
 async def quantity(id: str, request: Request):
     """Retrieve quantity information with content negotiation support.
     
@@ -745,6 +792,7 @@ async def quantity(id: str, request: Request):
             SELECT ?label ?concept ?constant
             WHERE {{
                 <{uri}> skos:prefLabel ?label .
+                FILTER (lang(?label) = "" || lang(?label) = "en")
                 OPTIONAL {{ <{uri}> dcterms:hasPart ?concept }}
                 OPTIONAL {{ <{uri}> codata:hasConstant ?constant }}
             }}
@@ -801,19 +849,24 @@ async def quantity(id: str, request: Request):
         raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
 
 
-@app.get("/units")
+@app.get("/units", response_model=List[Unit], response_model_exclude_none=True)
 async def units(request: Request):
     """Retrieve all units using SPARQL and return as structured data."""
     try:
-        # Query for units - get the literal identifier as the name
         query = """
-            SELECT ?uri ?name
+            SELECT ?uri ?symbol ?prefLabel ?ucumCode ?siExpression
             WHERE {
                 ?uri a codata:Unit ;
-                    schema:identifier ?name .
-                FILTER (isLiteral(?name))
+                    schema:identifier ?symbol .
+                FILTER (isLiteral(?symbol))
+                OPTIONAL {
+                    ?uri skos:prefLabel ?prefLabel .
+                    FILTER (lang(?prefLabel) = "" || lang(?prefLabel) = "en")
+                }
+                OPTIONAL { ?uri ucum:ucum ?ucumCode }
+                OPTIONAL { ?uri ucum:si_expression ?siExpression }
             }
-            ORDER BY ?name
+            ORDER BY ?symbol
             """
         query = build_sparql_query(query)
         results = run_sparql_query(query)
@@ -825,8 +878,18 @@ async def units(request: Request):
         for row in bindings:
             u_uri = str(row.uri)
             u_id = u_uri.split("/")[-1]
-            u_name = str(row.name) if row.name else u_id
-            units_list.append(Unit(id=u_id, uri=u_uri, name=u_name))
+            u_name = str(row.prefLabel) if row.prefLabel else (str(row.symbol) if row.symbol else u_id)
+            ucum_code = str(row.ucumCode) if row.ucumCode else None
+            si_expr = str(row.siExpression) if row.siExpression else None
+            units_list.append(
+                Unit(
+                    id=u_id,
+                    uri=u_uri,
+                    name=u_name,
+                    ucumCode=ucum_code,
+                    siExpression=si_expr,
+                )
+            )
 
         # Prepare JSON serializable data
         units_json = [u.model_dump(exclude_none=True) for u in units_list]
@@ -834,7 +897,7 @@ async def units(request: Request):
         # Check if HTML is requested
         accept = request.headers.get("accept", "")
         if "text/html" in accept:
-            json_ld = json.dumps(units_json, indent=2)
+            json_ld = json.dumps(with_jsonld_context(units_json), indent=2)
             return templates.TemplateResponse(
                 request,
                 "units.html",
@@ -848,35 +911,50 @@ async def units(request: Request):
     except SparqlQueryError as e:
         raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
 
-@app.get("/constants")
-async def constants(request: Request):
-    """Retrieve all constants using SPARQL and return as structured data."""
+@app.get("/constants", response_model=List[Constant], response_model_exclude_none=True)
+async def constants(
+    request: Request,
+    include_deprecated: bool = False,
+    version: Optional[str] = None,
+):
+    """Retrieve constants using SPARQL and return as structured data.
+
+    By default, returns only active constants from the latest CODATA release (2022).
+    Pass `include_deprecated=true` to include discontinued historical constants,
+    or `version=<year>` to filter constants published in a specific adjustment year.
+    """
     try:
-        query = """
-            SELECT ?uri ?label ?quantityUri ?quantityLabel ?valueUri ?value ?uncertainty ?valueDecimal ?valueFloat ?uncertaintyDecimal ?uncertaintyFloat ?versionId ?unitUri
-            WHERE {
+        version_filter = f'FILTER (?versionId = "{version}")' if version else ""
+        query = f"""
+            SELECT ?uri ?label ?isDeprecated ?quantityUri ?quantityLabel ?valueUri ?value ?uncertainty ?valueDecimal ?valueFloat ?uncertaintyDecimal ?uncertaintyFloat ?nistExponent ?isExact ?isTruncated ?versionId ?unitUri
+            WHERE {{
                 ?uri a codata:Constant ;
                     skos:prefLabel ?label .
                 FILTER (lang(?label) = "" || lang(?label) = "en")
-                OPTIONAL { 
+                OPTIONAL {{ ?uri owl:deprecated ?isDeprecated }}
+                OPTIONAL {{ 
                     ?uri codata:hasQuantity ?quantityUri .
                     ?quantityUri skos:prefLabel ?quantityLabel .
                     FILTER (lang(?quantityLabel) = "" || lang(?quantityLabel) = "en")
-                }
-                OPTIONAL {
+                }}
+                OPTIONAL {{
                     ?uri codata:hasUnit ?unitUri .
-                }
-                OPTIONAL {
+                }}
+                OPTIONAL {{
                     ?uri codata:hasValue ?valueUri .
                     ?valueUri codata:value ?value ;
                               codata:versionId ?versionId .
-                    OPTIONAL { ?valueUri codata:uncertainty ?uncertainty }
-                    OPTIONAL { ?valueUri codata:valueDecimal ?valueDecimal }
-                    OPTIONAL { ?valueUri codata:valueFloat ?valueFloat }
-                    OPTIONAL { ?valueUri codata:uncertaintyDecimal ?uncertaintyDecimal }
-                    OPTIONAL { ?valueUri codata:uncertaintyFloat ?uncertaintyFloat }
-                }
-            }
+                    {version_filter}
+                    OPTIONAL {{ ?valueUri codata:uncertainty ?uncertainty }}
+                    OPTIONAL {{ ?valueUri codata:valueDecimal ?valueDecimal }}
+                    OPTIONAL {{ ?valueUri codata:valueFloat ?valueFloat }}
+                    OPTIONAL {{ ?valueUri codata:uncertaintyDecimal ?uncertaintyDecimal }}
+                    OPTIONAL {{ ?valueUri codata:uncertaintyFloat ?uncertaintyFloat }}
+                    OPTIONAL {{ ?valueUri codata:nistExponent ?nistExponent }}
+                    OPTIONAL {{ ?valueUri codata:isExact ?isExact }}
+                    OPTIONAL {{ ?valueUri codata:isTruncated ?isTruncated }}
+                }}
+            }}
             ORDER BY ?label DESC(?versionId)
             """
         query = build_sparql_query(query)
@@ -893,7 +971,14 @@ async def constants(request: Request):
             # Skip if we already processed this constant (we already have the latest value)
             if c_id in constants_dict:
                 continue
-                
+
+            is_deprecated = bool(row.isDeprecated) if row.isDeprecated else False
+            if version and not row.value:
+                # Constant was not published in the requested version
+                continue
+            if not version and not include_deprecated and is_deprecated:
+                continue
+
             c_label = str(row.label) if row.label else c_id
             
             # Build quantity if present
@@ -911,7 +996,7 @@ async def constants(request: Request):
                 u_id = u_uri.split("/")[-1]
                 unit = Unit(id=u_id, uri=u_uri)
             
-            # Build latest constant value if present (simplified for list view)
+            # Build latest constant value if present
             latest_value = None
             if row.value:
                 value_uri = str(row.valueUri) if row.valueUri else ""
@@ -926,6 +1011,9 @@ async def constants(request: Request):
                     valueFloat=float(row.valueFloat) if row.valueFloat else None,
                     uncertaintyDecimal=Decimal(str(row.uncertaintyDecimal)) if row.uncertaintyDecimal else None,
                     uncertaintyFloat=float(row.uncertaintyFloat) if row.uncertaintyFloat else None,
+                    nistExponent=int(row.nistExponent) if row.nistExponent is not None else None,
+                    isExact=bool(row.isExact) if row.isExact is not None else None,
+                    isTruncated=bool(row.isTruncated) if row.isTruncated is not None else None,
                     versionId=version_id,
                 )
             
@@ -933,6 +1021,7 @@ async def constants(request: Request):
                 id=c_id,
                 uri=c_uri,
                 name=c_label,
+                isDeprecated=True if is_deprecated else None,
                 quantity=quantity,
                 value=latest_value,
                 unit=unit,
@@ -944,7 +1033,7 @@ async def constants(request: Request):
         # Check if HTML is requested
         accept = request.headers.get("accept", "")
         if "text/html" in accept:
-            json_ld = json.dumps(constants_list, indent=2)
+            json_ld = json.dumps(with_jsonld_context(constants_list), indent=2)
             return templates.TemplateResponse(
                 request,
                 "constants.html",
@@ -959,7 +1048,7 @@ async def constants(request: Request):
         raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
 
 
-@app.get("/constants/versions")
+@app.get("/constants/versions", response_model=List[Version], response_model_exclude_none=True)
 async def versions(request: Request):
     """Retrieve all versions using SPARQL and return as structured data."""
     try:
@@ -997,7 +1086,7 @@ async def versions(request: Request):
         # Check if HTML is requested
         accept = request.headers.get("accept", "")
         if "text/html" in accept:
-            json_ld = json.dumps(versions_json, indent=2)
+            json_ld = json.dumps(with_jsonld_context(versions_json), indent=2)
             return templates.TemplateResponse(
                 request,
                 "versions.html",
@@ -1012,7 +1101,7 @@ async def versions(request: Request):
         raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
 
 
-@app.get("/constants/versions/{id}")
+@app.get("/constants/versions/{id}", response_model=Version, response_model_exclude_none=True)
 async def version(id: str, request: Request):
     """Retrieve version information with content negotiation support.
     
@@ -1093,7 +1182,7 @@ async def version(id: str, request: Request):
         raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
 
 
-@app.get("/constants/{id}")
+@app.get("/constants/{id}", response_model=Constant, response_model_exclude_none=True)
 async def constant(id: str, request: Request):
     """Retrieve constant information with content negotiation support.
     
@@ -1101,12 +1190,13 @@ async def constant(id: str, request: Request):
     """
     try:
         uri = CONSTANT[id]
-        # SPARQL query to get constant details, quantity, and unit
+        # SPARQL query to get constant details, quantity, unit, and deprecation status
         query = f"""
-            SELECT ?label ?quantity ?unit
+            SELECT ?label ?isDeprecated ?quantity ?unit
             WHERE {{
                 <{uri}> skos:prefLabel ?label .
                 FILTER (lang(?label) = "" || lang(?label) = "en")
+                OPTIONAL {{ <{uri}> owl:deprecated ?isDeprecated }}
                 OPTIONAL {{ <{uri}> codata:hasQuantity ?quantity }}
                 OPTIONAL {{ <{uri}> codata:hasUnit ?unit }}
             }}
@@ -1122,6 +1212,7 @@ async def constant(id: str, request: Request):
         # Get label from first result
         first = bindings[0]
         label = str(first.label) if first.label else ""
+        is_deprecated = bool(first.isDeprecated) if hasattr(first, 'isDeprecated') and first.isDeprecated else False
 
         # Get quantity (should be same across all rows)
         quantity = None
@@ -1139,15 +1230,16 @@ async def constant(id: str, request: Request):
 
         # Query for all ConstantValues that reference this constant via dcterms:isVersionOf
         values_query = f"""
-            SELECT ?valueUri ?val ?uncertainty ?valueDecimal ?valueFloat ?uncertaintyDecimal ?uncertaintyFloat ?isExact ?isTruncated ?versionId ?versionUri
+            SELECT ?valueUri ?val ?uncertainty ?valueDecimal ?valueFloat ?uncertaintyDecimal ?uncertaintyFloat ?nistExponent ?isExact ?isTruncated ?versionId ?versionUri
             WHERE {{
                 ?valueUri a codata:ConstantValue ;
                     dcterms:isVersionOf <{uri}> ;
                     codata:value ?val ;
                     codata:isExact ?isExact ;
-                    codata:isTruncated ?isTruncated ;
                     codata:versionId ?versionId ;
                     codata:hasVersion ?versionUri .
+                OPTIONAL {{ ?valueUri codata:isTruncated ?isTruncated }}
+                OPTIONAL {{ ?valueUri codata:nistExponent ?nistExponent }}
                 OPTIONAL {{ ?valueUri codata:uncertainty ?uncertainty }}
                 OPTIONAL {{ ?valueUri codata:valueDecimal ?valueDecimal }}
                 OPTIONAL {{ ?valueUri codata:valueFloat ?valueFloat }}
@@ -1177,8 +1269,9 @@ async def constant(id: str, request: Request):
                 valueFloat=float(row.valueFloat) if hasattr(row, 'valueFloat') and row.valueFloat else None,
                 uncertaintyDecimal=Decimal(str(row.uncertaintyDecimal)) if hasattr(row, 'uncertaintyDecimal') and row.uncertaintyDecimal else None,
                 uncertaintyFloat=float(row.uncertaintyFloat) if hasattr(row, 'uncertaintyFloat') and row.uncertaintyFloat else None,
-                isExact=bool(row.isExact),
-                isTruncated=bool(row.isTruncated),
+                nistExponent=int(row.nistExponent) if hasattr(row, 'nistExponent') and row.nistExponent is not None else None,
+                isExact=bool(row.isExact) if row.isExact is not None else None,
+                isTruncated=bool(row.isTruncated) if hasattr(row, 'isTruncated') and row.isTruncated is not None else None,
                 versionId=str(row.versionId),
                 version=Version(id=version_id, uri=version_uri),
             )
@@ -1194,6 +1287,7 @@ async def constant(id: str, request: Request):
             id=id,
             uri=str(uri),
             name=label,
+            isDeprecated=True if is_deprecated else None,
             quantity=quantity,
             unit=unit,
             value=current_value,
@@ -1213,7 +1307,7 @@ async def constant(id: str, request: Request):
         raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
 
 
-@app.get("/constants/{id}/{versionId}")
+@app.get("/constants/{id}/{versionId}", response_model=ConstantValue, response_model_exclude_none=True)
 async def constant_value(id: str, versionId: str, request: Request):
     """Retrieve a specific ConstantValue for a constant in a given CODATA version.
     
@@ -1225,20 +1319,24 @@ async def constant_value(id: str, versionId: str, request: Request):
         
         # SPARQL query to get the specific ConstantValue for this constant and version
         query = f"""
-            SELECT ?valueUri ?val ?uncertainty ?valueDecimal ?valueFloat ?uncertaintyDecimal ?uncertaintyFloat ?isExact ?isTruncated ?label ?quantity ?unit
+            SELECT ?valueUri ?val ?uncertainty ?valueDecimal ?valueFloat ?uncertaintyDecimal ?uncertaintyFloat ?nistExponent ?isExact ?isTruncated ?label ?quantity ?unit
             WHERE {{
                 ?valueUri a codata:ConstantValue ;
                     dcterms:isVersionOf <{constant_uri}> ;
                     codata:value ?val ;
                     codata:isExact ?isExact ;
-                    codata:isTruncated ?isTruncated ;
                     codata:hasVersion <{version_uri}> .
+                OPTIONAL {{ ?valueUri codata:isTruncated ?isTruncated }}
+                OPTIONAL {{ ?valueUri codata:nistExponent ?nistExponent }}
                 OPTIONAL {{ ?valueUri codata:uncertainty ?uncertainty }}
                 OPTIONAL {{ ?valueUri codata:valueDecimal ?valueDecimal }}
                 OPTIONAL {{ ?valueUri codata:valueFloat ?valueFloat }}
                 OPTIONAL {{ ?valueUri codata:uncertaintyDecimal ?uncertaintyDecimal }}
                 OPTIONAL {{ ?valueUri codata:uncertaintyFloat ?uncertaintyFloat }}
-                OPTIONAL {{ <{constant_uri}> skos:prefLabel ?label }}
+                OPTIONAL {{
+                    <{constant_uri}> skos:prefLabel ?label .
+                    FILTER (lang(?label) = "" || lang(?label) = "en")
+                }}
                 OPTIONAL {{ <{constant_uri}> codata:hasQuantity ?quantity }}
                 OPTIONAL {{ <{constant_uri}> codata:hasUnit ?unit }}
             }}
@@ -1281,8 +1379,9 @@ async def constant_value(id: str, versionId: str, request: Request):
             valueFloat=float(first.valueFloat) if hasattr(first, 'valueFloat') and first.valueFloat else None,  # type: ignore
             uncertaintyDecimal=Decimal(str(first.uncertaintyDecimal)) if hasattr(first, 'uncertaintyDecimal') and first.uncertaintyDecimal else None,  # type: ignore
             uncertaintyFloat=float(first.uncertaintyFloat) if hasattr(first, 'uncertaintyFloat') and first.uncertaintyFloat else None,  # type: ignore
-            isExact=bool(first.isExact),  # type: ignore
-            isTruncated=bool(first.isTruncated),  # type: ignore
+            nistExponent=int(first.nistExponent) if hasattr(first, 'nistExponent') and first.nistExponent is not None else None,  # type: ignore
+            isExact=bool(first.isExact) if first.isExact is not None else None,  # type: ignore
+            isTruncated=bool(first.isTruncated) if hasattr(first, 'isTruncated') and first.isTruncated is not None else None,  # type: ignore
             versionId=versionId,
             version=Version(id=versionId, uri=str(version_uri)),
         )
@@ -1310,7 +1409,7 @@ async def constant_value(id: str, versionId: str, request: Request):
         raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
 
 
-@app.get("/units/{id}")
+@app.get("/units/{id}", response_model=Unit, response_model_exclude_none=True)
 async def unit(id: str, request: Request):
     """Retrieve unit information with content negotiation support.
     
@@ -1319,15 +1418,18 @@ async def unit(id: str, request: Request):
     try:
         uri = UNIT[id]
         
-        # SPARQL query to get unit identifiers
-        # Units have schema:identifier which can be:
-        # - A literal string (the unit symbol itself)
-        # - A URI to a PropertyValue (for SI/UCUM identifiers)
+        # SPARQL query to get unit identifiers and enrichment properties
         query = f"""
-            SELECT ?identifier
+            SELECT ?identifier ?prefLabel ?ucumCode ?siExpression
             WHERE {{
                 <{uri}> a codata:Unit ;
                     schema:identifier ?identifier .
+                OPTIONAL {{
+                    <{uri}> skos:prefLabel ?prefLabel .
+                    FILTER (lang(?prefLabel) = "" || lang(?prefLabel) = "en")
+                }}
+                OPTIONAL {{ <{uri}> ucum:ucum ?ucumCode }}
+                OPTIONAL {{ <{uri}> ucum:si_expression ?siExpression }}
             }}
             """
         query = build_sparql_query(query)
@@ -1340,6 +1442,9 @@ async def unit(id: str, request: Request):
         # Process identifiers - separate URIs (PropertyValues) from literals
         identifier_uris = []
         unit_symbol = None
+        pref_label = None
+        ucum_code = None
+        si_expr = None
         
         for row in bindings:
             identifier = row.identifier
@@ -1347,6 +1452,12 @@ async def unit(id: str, request: Request):
                 identifier_uris.append(str(identifier))
             elif isinstance(identifier, Literal):
                 unit_symbol = str(identifier)
+            if row.prefLabel:
+                pref_label = str(row.prefLabel)
+            if row.ucumCode:
+                ucum_code = str(row.ucumCode)
+            if row.siExpression:
+                si_expr = str(row.siExpression)
 
         # Query PropertyValue details for each identifier URI
         identifiers = []
@@ -1404,7 +1515,9 @@ async def unit(id: str, request: Request):
         unit_obj = Unit(
             id=id,
             uri=str(uri),
-            name=unit_symbol,
+            name=pref_label or unit_symbol,
+            ucumCode=ucum_code,
+            siExpression=si_expr,
             identifiers=identifiers if identifiers else None,
             constants=constants if constants else None,
         )
@@ -1415,139 +1528,6 @@ async def unit(id: str, request: Request):
         resource_data = unit_obj.model_dump(exclude_none=True)
         
         return negotiate_content(str(uri), request, json_response, resource_data, "unit.html")
-
-    except GraphNotInitializedError:
-        raise HTTPException(status_code=503, detail="RDF graph not initialized")
-    except SparqlQueryError as e:
-        raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
-
-
-@app.get("/constants/versions")
-async def versions(request: Request):
-    """Retrieve all versions using SPARQL and return as structured data."""
-    try:
-        query = """
-            SELECT ?uri ?identifier ?issued
-            WHERE {
-                ?uri a codata:Version ;
-                    schema:identifier ?identifier .
-                OPTIONAL { ?uri dcterms:issued ?issued }
-            }
-            ORDER BY ?identifier
-            """
-        query = build_sparql_query(query)
-        results = run_sparql_query(query)
-
-        bindings = list(results)
-
-        # Build Version instances
-        versions_list = []
-        for row in bindings:
-            v_uri = str(row.uri)
-            v_id = str(row.identifier) if row.identifier else v_uri.split("/")[-1]
-            
-            # Parse the issued date
-            published = None
-            if row.issued:
-                from datetime import date
-                published = date.fromisoformat(str(row.issued))
-            
-            versions_list.append(Version(id=v_id, uri=v_uri, published=published))
-
-        # Prepare JSON serializable data
-        versions_json = [v.model_dump(exclude_none=True) for v in versions_list]
-        
-        # Check if HTML is requested
-        accept = request.headers.get("accept", "")
-        if "text/html" in accept:
-            json_ld = json.dumps(versions_json, indent=2)
-            return templates.TemplateResponse(
-                request,
-                "versions.html",
-                {"resources": versions_json, "json_ld": json_ld}
-            )
-        
-        return JSONResponse(content=versions_json)
-
-    except GraphNotInitializedError:
-        raise HTTPException(status_code=503, detail="RDF graph not initialized")
-    except SparqlQueryError as e:
-        raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
-
-@app.get("/constants/versions/{id}")
-async def version(id: str, request: Request):
-    """Retrieve version information with content negotiation support.
-    
-    Returns JSON by default, or RDF formats based on Accept header.
-    """
-    try:
-        uri = VERSION[id]
-        
-        # SPARQL query to get version details
-        query = f"""
-            SELECT ?issued ?identifier
-            WHERE {{
-                <{uri}> a codata:Version .
-                OPTIONAL {{ <{uri}> dcterms:issued ?issued }}
-                OPTIONAL {{ <{uri}> schema:identifier ?identifier }}
-            }}
-            """
-        query = build_sparql_query(query)
-        results = run_sparql_query(query)
-
-        bindings = list(results)
-        if not bindings:
-            raise HTTPException(status_code=404, detail=f"Version '{id}' not found")
-
-        first = bindings[0]
-        
-        # Parse the issued date
-        published = None
-        if first.issued:
-            from datetime import date
-            # The date is in xsd:date format (YYYY-MM-DD)
-            published = date.fromisoformat(str(first.issued))
-
-        # Query for constants that have ConstantValues belonging to this version
-        # ConstantValue has codata:hasVersion pointing to the version
-        # and dcterms:isVersionOf pointing to the parent Constant
-        constants_query = f"""
-            SELECT DISTINCT ?constantUri ?constantLabel
-            WHERE {{
-                ?constantValue a codata:ConstantValue ;
-                    codata:hasVersion <{uri}> ;
-                    dcterms:isVersionOf ?constantUri .
-                ?constantUri skos:prefLabel ?constantLabel .
-                FILTER (lang(?constantLabel) = "" || lang(?constantLabel) = "en")
-            }}
-            ORDER BY ?constantLabel
-            """
-        constants_query = build_sparql_query(constants_query)
-        constants_results = run_sparql_query(constants_query)
-        constants_bindings = list(constants_results)
-
-        # Build Constant instances
-        constants = []
-        for row in constants_bindings:
-            c_uri = str(row.constantUri)
-            c_id = c_uri.split("/")[-1]
-            c_label = str(row.constantLabel) if row.constantLabel else c_id
-            constants.append(Constant(id=c_id, uri=c_uri, name=c_label))
-
-        # Build the Version response
-        version_obj = Version(
-            id=id,
-            uri=str(uri),
-            published=published,
-            constants=constants if constants else None,
-        )
-
-        json_response = JSONResponse(content=version_obj.model_dump(exclude_none=True))
-        
-        # Prepare data for HTML template
-        resource_data = version_obj.model_dump(exclude_none=True)
-        
-        return negotiate_content(str(uri), request, json_response, resource_data, "version.html")
 
     except GraphNotInitializedError:
         raise HTTPException(status_code=503, detail="RDF graph not initialized")

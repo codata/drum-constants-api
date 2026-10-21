@@ -2,7 +2,7 @@
 
 ## Overview
 
-The US BLS Toolkit is an open-source project that welcomes contributions from the community. This document outlines the governance structure of the project and the processes for making decisions.
+The CODATA DRUM Constants API (`drum-api`) is an open-source project that welcomes contributions from the community. This document outlines the governance structure of the project and the processes for making decisions.
 
 ## Governance Model
 
@@ -45,7 +45,7 @@ Major decisions include:
 
 ### How to Contribute
 1. Review the [Code of Conduct](CODE_OF_CONDUCT.md)
-2. Check existing [Issues](https://github.com/DataArtifex/usbls-toolkit/issues) and [Pull Requests](https://github.com/DataArtifex/usbls-toolkit/pulls)
+2. Check existing [Issues](https://github.com/codata/drum-api/issues) and [Pull Requests](https://github.com/codata/drum-api/pulls)
 3. For bug fixes and minor improvements: submit a pull request directly
 4. For new features or major changes: open an issue for discussion first
 

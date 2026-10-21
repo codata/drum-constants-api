@@ -700,7 +700,8 @@
                 html += `<tr onclick="loadDetail('${currentResource}', '${item.id}')">`;
 
                 if (currentResource === 'constants') {
-                    html += `<td>${item.name || '-'}</td>`;
+                    const depBadge = item.isDeprecated ? ' <span class="badge" style="background:#dc2626;color:white;font-size:0.7rem;">Deprecated</span>' : '';
+                    html += `<td>${item.name || '-'}${depBadge}</td>`;
                     html += `<td><code>${item.value?.value || '-'}</code></td>`;
                     html += `<td><code>${item.value?.uncertainty || '-'}</code></td>`;
                     html += `<td>${item.unit?.name || item.unit?.id || '-'}</td>`;
@@ -778,6 +779,15 @@
 
             // Resource-specific fields
             if (resource === 'constants') {
+                if (item.isDeprecated) {
+                    html += `
+                        <div class="detail-section">
+                            <h4>Status</h4>
+                            <div class="detail-value"><span class="badge" style="background: #dc2626; color: white;">Discontinued / Deprecated</span></div>
+                        </div>
+                    `;
+                }
+
                 if (item.quantity) {
                     html += `
                         <div class="detail-section">
@@ -808,6 +818,7 @@
                             <div class="number">${item.value.value}</div>
                             ${item.value.uncertainty ? `<div class="uncertainty">Uncertainty: ± ${item.value.uncertainty}</div>` : ''}
                             ${item.value.isExact ? `<div class="unit">Exact value</div>` : ''}
+                            ${item.value.nistExponent !== undefined && item.value.nistExponent !== null ? `<div class="unit" style="font-size: 0.85rem; color: var(--text-muted);">NIST scale exponent: 10<sup>${item.value.nistExponent}</sup></div>` : ''}
                         </div>
                     `;
                     html += `</div>`;
@@ -892,6 +903,24 @@
             }
 
             if (resource === 'units') {
+                if (item.ucumCode) {
+                    html += `
+                        <div class="detail-section">
+                            <h4>UCUM Code</h4>
+                            <div class="detail-value"><code>${item.ucumCode}</code></div>
+                        </div>
+                    `;
+                }
+
+                if (item.siExpression) {
+                    html += `
+                        <div class="detail-section">
+                            <h4>SI Expression</h4>
+                            <div class="detail-value"><code>${item.siExpression}</code></div>
+                        </div>
+                    `;
+                }
+
                 if (item.identifiers && item.identifiers.length > 0) {
                     html += `<div class="detail-section"><h4>Identifiers</h4><div class="identifier-list">`;
                     for (const ident of item.identifiers) {

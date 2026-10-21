@@ -29,6 +29,9 @@
             <tr style="border-bottom: 1px solid #e9ecef;">
                 <td style="padding: 0.75rem;">
                     <a href="{{ root_path }}/constants/{{ constant.id }}">{{ constant.name }}</a>
+                    {% if constant.isDeprecated %}
+                    <span class="badge" style="background: #dc3545; color: white; font-size: 0.75rem; margin-left: 0.35rem;">Deprecated</span>
+                    {% endif %}
                 </td>
                 <td style="padding: 0.75rem; text-align: right; font-family: monospace; white-space: nowrap;">
                     {% if constant.value %}

@@ -1,7 +1,7 @@
 [project]
 name = "drum-api"
-version = "0.1.0"
-description = "Open source Flask API package."
+version = "0.4.0"
+description = "CODATA DRUM Physical Fundamental Constants FastAPI Service."
 authors = [{ name = "Pascal Heus", email = "pascal@codata.org" }]
 license = "MIT"
 readme = "README.md"
@@ -32,6 +32,9 @@ include = [
     "src/data/*.n3",
     "src/static/**/*",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 [build-system]
 requires = ["hatchling"]

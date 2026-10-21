@@ -3,8 +3,8 @@ from decimal import Decimal
 from typing import Annotated, Optional
 from pydantic import BaseModel, Field, PlainSerializer, model_validator
 
-# Serialize Decimal as string to preserve exact precision
-DecimalStr = Annotated[Decimal, PlainSerializer(lambda x: format(x, 'f'), return_type=str)]
+# Serialize Decimal as string to preserve exact precision without fixed-point zero inflation
+DecimalStr = Annotated[Decimal, PlainSerializer(lambda x: str(x), return_type=str)]
 
 # Serialize date as ISO format string
 DateStr = Annotated[date, PlainSerializer(lambda x: x.isoformat(), return_type=str)]
@@ -33,6 +33,8 @@ class Quantity(Resource):
 
 class Unit(Resource):
     name: Optional[str] = None
+    ucumCode: Optional[str] = None
+    siExpression: Optional[str] = None
     identifiers: Optional[list["Identifier"]] = None
     constants: Optional[list["Constant"]] = None
     
@@ -54,6 +56,7 @@ class ConstantValue(Resource):
     uncertainty: Optional[str] = None
     uncertaintyDecimal: Optional[DecimalStr] = None
     uncertaintyFloat: Optional[float] = None
+    nistExponent: Optional[int] = None
     isExact: Optional[bool] = None
     isTruncated: Optional[bool] = None
     version: Optional[Version] = None
@@ -61,6 +64,7 @@ class ConstantValue(Resource):
 
 class Constant(Resource):
     name: str
+    isDeprecated: Optional[bool] = None
     quantity: Optional[Quantity] = None
     value: Optional[ConstantValue] = None
     unit: Optional[Unit] = None 

@@ -4,13 +4,23 @@
 
 {% block content %}
 <article typeof="schema:Thing">
-    <h2 property="schema:name">{{ resource.name }}</h2>
+    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <h2 property="schema:name" style="margin: 0;">{{ resource.name }}</h2>
+        {% if resource.isDeprecated %}
+        <span class="badge" style="background: #dc3545; color: white;">Deprecated / Discontinued</span>
+        {% endif %}
+    </div>
     <p class="uri" property="@id">{{ resource.uri }}</p>
 
     <div class="metadata">
         <dl>
             <dt>ID:</dt>
             <dd><code>{{ resource.id }}</code></dd>
+
+            {% if resource.isDeprecated %}
+            <dt>Status:</dt>
+            <dd><span class="badge" style="background: #dc3545; color: white;">Discontinued after {{ resource.value.versionId if resource.value else 'earlier release' }}</span></dd>
+            {% endif %}
 
             {% if resource.value %}
             <dt>Value:</dt>
@@ -45,12 +55,22 @@
             <dd><code>{{ resource.value.uncertaintyFloat }}</code></dd>
             {% endif %}
 
+            {% if resource.value.nistExponent is not none %}
+            <dt>NIST Exponent:</dt>
+            <dd><code>{{ resource.value.nistExponent }}</code> (scale factor: 10<sup>{{ resource.value.nistExponent }}</sup>)</dd>
+            {% endif %}
+
             <dt>Version:</dt>
             <dd><code>{{ resource.value.versionId }}</code></dd>
 
             {% if resource.value.isExact %}
             <dt>Exact:</dt>
             <dd><span class="badge">Exact Value</span></dd>
+            {% endif %}
+
+            {% if resource.value.isTruncated %}
+            <dt>Truncated:</dt>
+            <dd><span class="badge" style="background: #ffc107; color: black;">Truncated</span></dd>
             {% endif %}
             {% endif %}
 
