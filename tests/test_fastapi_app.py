@@ -1,6 +1,8 @@
 import json
 import math
 import re
+import socket
+import threading
 from fastapi.testclient import TestClient
 from src.app import app
 import pytest
@@ -19,11 +21,11 @@ def test_index(client):
 
 
 def test_api_version(client):
-    """Verify package and OpenAPI version is 0.4.0."""
+    """Verify package and OpenAPI version is 0.4.1."""
     from src import __version__
-    assert __version__ == "0.4.0"
+    assert __version__ == "0.4.1"
     openapi = client.get("/openapi.json").json()
-    assert openapi["info"]["version"] == "0.4.0"
+    assert openapi["info"]["version"] == "0.4.1"
 
 
 def test_openapi_contract_has_response_models(client):
@@ -222,3 +224,126 @@ def test_sparql_endpoint(client):
     bindings = resp.json()["results"]["bindings"]
     assert len(bindings) == 1
     assert bindings[0]["val"]["value"] == "299792458"
+
+
+# --- SPARQL SERVICE must not make the server contact other hosts (SSRF) ---
+
+
+@pytest.fixture
+def listener():
+    """A local TCP listener that records whether anything connects to it."""
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(5)
+    srv.settimeout(0.2)
+    hits = []
+    stop = threading.Event()
+
+    def accept_loop():
+        while not stop.is_set():
+            try:
+                conn, _ = srv.accept()
+                hits.append(conn.recv(4096))
+                conn.close()
+            except OSError:
+                pass
+
+    t = threading.Thread(target=accept_loop, daemon=True)
+    t.start()
+    yield f"http://127.0.0.1:{srv.getsockname()[1]}/probe", hits
+    stop.set()
+    t.join(1)
+    srv.close()
+
+
+SERVICE_QUERIES = [
+    "SELECT * WHERE {{ SERVICE <{url}> {{ ?s ?p ?o }} }}",
+    "select * where {{ service silent <{url}> {{ ?s ?p ?o }} }}",
+    "SELECT * WHERE {{ ?a ?b ?c OPTIONAL {{ SERVICE <{url}> {{ ?s ?p ?o }} }} }} LIMIT 1",
+    "CONSTRUCT {{ ?s ?p ?o }} WHERE {{ SERVICE <{url}> {{ ?s ?p ?o }} }}",
+    "ASK {{ {{ ?a ?b ?c }} UNION {{ SERVICE <{url}> {{ ?s ?p ?o }} }} }}",
+    "SELECT * WHERE {{ ?s ?p ?o MINUS {{ SERVICE <{url}> {{ ?s ?p ?o }} }} }}",
+    "SELECT * WHERE {{ {{ SELECT * WHERE {{ SERVICE <{url}> {{ ?s ?p ?o }} }} }} }}",
+    "SELECT * WHERE {{ ?s ?p ?o FILTER EXISTS {{ SERVICE <{url}> {{ ?s ?p ?o }} }} }}",
+]
+
+
+@pytest.mark.parametrize("template", SERVICE_QUERIES)
+def test_sparql_get_refuses_service(client, listener, template):
+    url, hits = listener
+    r = client.get("/sparql", params={"query": template.format(url=url)})
+    assert r.status_code == 400
+    assert "SERVICE" in r.text
+    assert hits == [], "server made an outbound request"
+
+
+@pytest.mark.parametrize("content_type", ["application/sparql-query", "application/x-www-form-urlencoded",
+                                          "application/json"])
+def test_sparql_post_refuses_service(client, listener, content_type):
+    url, hits = listener
+    q = SERVICE_QUERIES[0].format(url=url)
+    if content_type == "application/sparql-query":
+        r = client.post("/sparql", content=q, headers={"Content-Type": content_type})
+    elif content_type == "application/json":
+        r = client.post("/sparql", json={"query": q})
+    else:
+        r = client.post("/sparql", data={"query": q})
+    assert r.status_code == 400
+    assert hits == [], "server made an outbound request"
+
+
+def test_sparql_syntax_error_is_400(client):
+    r = client.get("/sparql", params={"query": "SELECT * WHERE { ?s ?p"})
+    assert r.status_code == 400
+
+
+def test_sparql_ordinary_query_still_works(client):
+    q = ("PREFIX codata: <https://w3id.org/codata/model/> "
+         "SELECT ?v WHERE { <https://w3id.org/codata/constants/SpeedOfLight/2022> codata:value ?v }")
+    r = client.get("/sparql", params={"query": q}, headers={"Accept": "application/sparql-results+json"})
+    assert r.status_code == 200
+    assert r.json()["results"]["bindings"][0]["v"]["value"] == "299792458"
+
+
+def test_sparql_query_without_prefix_uses_graph_namespaces(client):
+    """Test that queries omitting explicit PREFIX declarations resolve namespaces bound to the graph."""
+    q = "SELECT ?v WHERE { constant:SpeedOfLight codata:hasValue ?val . ?val codata:versionId '2022' ; codata:value ?v }"
+    r = client.get("/sparql", params={"query": q}, headers={"Accept": "application/sparql-results+json"})
+    assert r.status_code == 200
+    assert r.json()["results"]["bindings"][0]["v"]["value"] == "299792458"
+
+
+def test_sparql_construct_query(client):
+    """Test that CONSTRUCT queries format as RDF rather than throwing 500 serializer errors."""
+    q = ("PREFIX codata: <https://w3id.org/codata/model/> "
+         "PREFIX constant: <https://w3id.org/codata/constants/> "
+         "CONSTRUCT { constant:SpeedOfLight codata:hasValue ?v } "
+         "WHERE { constant:SpeedOfLight codata:hasValue ?v }")
+    # Turtle
+    r = client.get("/sparql", params={"query": q}, headers={"Accept": "text/turtle"})
+    assert r.status_code == 200
+    assert "text/turtle" in r.headers["content-type"]
+    assert "SpeedOfLight" in r.text
+
+    # JSON-LD
+    r_jsonld = client.get("/sparql", params={"query": q}, headers={"Accept": "application/ld+json"})
+    assert r_jsonld.status_code == 200
+    assert "application/ld+json" in r_jsonld.headers["content-type"]
+
+
+def test_sparql_ask_query(client):
+    """Test ASK queries."""
+    q = ("PREFIX constant: <https://w3id.org/codata/constants/> "
+         "ASK { constant:SpeedOfLight ?p ?o }")
+    r = client.get("/sparql", params={"query": q})
+    assert r.status_code == 200
+    assert r.json().get("boolean") is True
+
+
+def test_sparql_from_clause_does_not_fetch_remote(client, listener):
+    """Test that FROM <url> does not make an outbound network request."""
+    url, hits = listener
+    q = f"SELECT * FROM <{url}> WHERE {{ ?s ?p ?o }} LIMIT 1"
+    r = client.get("/sparql", params={"query": q})
+    assert r.status_code == 200
+    assert hits == [], "server made an outbound request for FROM clause"

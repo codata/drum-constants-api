@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.4.1] - 2026-11-02
+
+### Security
+- `/sparql` (GET and POST) no longer executes SPARQL `SERVICE` clauses. rdflib evaluates `SERVICE` by sending an HTTP request to the URL in the query, so any caller could make the server contact arbitrary hosts, including internal addresses (server-side request forgery). Queries containing `SERVICE` anywhere in their algebra are now rejected with 400 before evaluation. `SPARQL_LOAD_GRAPHS` is also disabled, so `FROM` / `FROM NAMED` can never fetch remote graphs.
+
+### Fixed
+- SPARQL results are evaluated inside the error handler, so evaluation errors return 400 instead of an unhandled 500.
+- `format_sparql_results` correctly identifies CONSTRUCT and DESCRIBE queries by query type rather than checking `hasattr(results, 'bindings')`, resolving 500 serializer errors when requesting RDF formats.
+- `application/x-www-form-urlencoded` POST queries now include a fallback decoder and explicit `python-multipart` dependency.
+
+### Added
+- Tests that `SERVICE` is refused for GET and all three POST content types, including `SERVICE SILENT` and `SERVICE` nested in `OPTIONAL` / `UNION` / `MINUS` / subqueries and in `CONSTRUCT` / `ASK`, verified with a local listener that receives no connection.
+- Tests for `CONSTRUCT`, `ASK`, and bound graph namespace prefix resolution on `/sparql`.
+
 ## [0.4.0] - 2026-10-20
 
 ### Added

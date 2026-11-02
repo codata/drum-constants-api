@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from . import __version__
 from .model import Concept, Quantity, Constant, ConstantValue, Unit, Version, Identifier
 from .config import settings
 from pydantic import BaseModel
@@ -19,8 +20,16 @@ from contextlib import asynccontextmanager
 import json
 import time
 import hashlib
+import urllib.parse
+import rdflib.plugins.sparql
 from rdflib.plugin import register
+from rdflib.plugins.sparql import prepareQuery
+from rdflib.plugins.sparql.parserutils import CompValue
 from rdflib.serializer import Serializer
+
+# Never fetch remote graphs named in FROM / FROM NAMED (relevant only if the
+# graph is ever changed to a Dataset; a plain Graph ignores them).
+rdflib.plugins.sparql.SPARQL_LOAD_GRAPHS = False
 
 # Register custom high-precision serializers
 register('turtle-hp', Serializer, 'src.serializer', 'HighPrecisionTurtleSerializer')
@@ -130,7 +139,7 @@ ROOT_PATH = os.getenv("ROOT_PATH", "")
 app = FastAPI(
     title=settings.API_TITLE,
     description=settings.API_DESCRIPTION,
-    version="0.4.0",
+    version=__version__,
     lifespan=lifespan,
     root_path=ROOT_PATH,
 )
@@ -309,7 +318,7 @@ logger.info(f"Loaded {len(graph)} triples from RDF data files - shared across al
 def format_sparql_results(results, accept: str = ""):
     """Format SPARQL query results based on Accept header."""
     # Check if it's a SELECT/ASK query (returns bindings) or CONSTRUCT/DESCRIBE (returns graph)
-    if hasattr(results, "bindings"):
+    if getattr(results, "type", None) in ("SELECT", "ASK"):
         # SELECT or ASK query - return as JSON or XML
         if "application/sparql-results+xml" in accept:
             return Response(
@@ -331,6 +340,14 @@ def format_sparql_results(results, accept: str = ""):
         for triple in results:
             result_graph.add(triple)
 
+        if "application/rdf+xml" in accept or "application/xml" in accept:
+            return Response(
+                result_graph.serialize(format="xml"), media_type="application/rdf+xml"
+            )
+        if "application/n-triples" in accept:
+            return Response(
+                result_graph.serialize(format="nt"), media_type="application/n-triples"
+            )
         if "text/turtle" in accept:
             return Response(
                 result_graph.serialize(format="turtle-hp"), media_type="text/turtle"
@@ -341,6 +358,10 @@ def format_sparql_results(results, accept: str = ""):
             return Response(
                 result_graph.serialize(format="json-ld", context=JSONLD_CONTEXT),
                 media_type="application/ld+json",
+            )
+        if "application/trig" in accept:
+            return Response(
+                result_graph.serialize(format="trig-hp"), media_type="application/trig"
             )
         # Default: Turtle
         return Response(
@@ -370,26 +391,49 @@ def run_sparql_query(query: str):
         return QUERY_CACHE[query_key]
 
     try:
+        init_ns = dict(graph.namespaces()) if graph else None
+        prepared = prepareQuery(query, initNs=init_ns)
+    except Exception as e:
+        raise SparqlQueryError(f"SPARQL query error: {str(e)}", e)
+
+    # SERVICE makes rdflib send an HTTP request to the URL in the query, which
+    # would let any caller make this server contact arbitrary hosts (SSRF).
+    # This endpoint only serves the local graph, so federated queries are refused.
+    if _contains_service(prepared.algebra):
+        raise SparqlQueryError("SPARQL SERVICE (federated query) is not supported by this endpoint")
+
+    try:
         start_time = time.time()
-        results = graph.query(query)
+        results = graph.query(prepared)
+        # Evaluate now, inside this try block: rdflib evaluates lazily, so
+        # without this, evaluation errors surface later as unhandled 500s.
+        if results.type in ("SELECT", "ASK"):
+            _ = results.bindings
+        else:
+            _ = results.graph
         duration = time.time() - start_time
 
         # Cache if query duration > 0.5 seconds
         if duration > 0.5:
-            # Force materialization to make the Result object reusable in cache
-            if hasattr(results, "bindings"):
-                # SELECT/ASK query: materializes bindings list
-                _ = results.bindings
-            elif hasattr(results, "graph"):
-                # CONSTRUCT/DESCRIBE query: materializes the result graph
-                _ = results.graph
-            
             QUERY_CACHE[query_key] = results
             logger.info(f"SPARQL query took {duration:.2f}s, added to cache (hash: {query_key[:10]}...)")
 
         return results
     except Exception as e:
         raise SparqlQueryError(f"SPARQL query error: {str(e)}", e)
+
+
+def _contains_service(node) -> bool:
+    """True if the SPARQL algebra tree contains a SERVICE clause."""
+    if isinstance(node, CompValue):
+        if node.name == "ServiceGraphPattern":
+            return True
+        return any(_contains_service(v) for v in node.values())
+    if isinstance(node, dict):
+        return any(_contains_service(v) for v in node.values())
+    if isinstance(node, (list, tuple, set)):
+        return any(_contains_service(v) for v in node)
+    return False
 
 
 def build_sparql_query(query: str) -> str:
@@ -1569,8 +1613,14 @@ async def sparql_post(request: Request):
     # Extract query based on content type
     if "application/x-www-form-urlencoded" in content_type:
         # SPARQL Protocol §2.1.2: query via POST with URL-encoded parameters
-        form_data = await request.form()
-        query = form_data.get("query")
+        try:
+            form_data = await request.form()
+            query = form_data.get("query")
+        except (AssertionError, Exception):
+            body = await request.body()
+            params = urllib.parse.parse_qs(body.decode("utf-8"))
+            query_vals = params.get("query")
+            query = query_vals[0] if query_vals else None
         if not query:
             raise HTTPException(status_code=400, detail="Missing 'query' parameter")
     elif "application/sparql-query" in content_type:

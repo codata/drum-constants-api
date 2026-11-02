@@ -1,6 +1,6 @@
 [project]
 name = "drum-api"
-version = "0.4.0"
+version = "0.4.1"
 description = "CODATA DRUM Physical Fundamental Constants FastAPI Service."
 authors = [{ name = "Pascal Heus", email = "pascal@codata.org" }]
 license = "MIT"
@@ -14,6 +14,7 @@ dependencies = [
     "rdflib",
     "jinja2",
     "pydantic-settings",
+    "python-multipart",
 ]
 
 [project.scripts]
