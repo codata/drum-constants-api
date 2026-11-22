@@ -70,6 +70,16 @@ def test_compact_number_filter_and_large_number_preservation(client):
     assert "e-27" in resp.text or "e-34" in resp.text
 
 
+def test_explorer_history_navigation_support(client):
+    """Verify that Knowledge Explorer contains browser history navigation and popstate handling."""
+    resp = client.get("/explorer", headers={"Accept": "text/html"})
+    assert resp.status_code == 200
+    assert "updateBrowserUrl" in resp.text
+    assert "window.history.pushState" in resp.text
+    assert "window.history.replaceState" in resp.text
+    assert "popstate" in resp.text
+
+
 def test_api_version(client):
     """Verify package and OpenAPI version is 0.5.0."""
     from src import __version__

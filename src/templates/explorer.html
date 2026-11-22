@@ -466,7 +466,62 @@
         return s.length > 22 ? s.slice(0, 22) + "…" : s;
     }
 
-    async function switchEntity(entity, targetId = null) {
+    function updateBrowserUrl(entity, id, pushHistory = true) {
+        const params = new URLSearchParams();
+        if (entity) params.set("entity", entity);
+        if (id) params.set("id", id);
+        if (entity === "constants") {
+            const verEl = document.getElementById("filter-version");
+            if (verEl && verEl.value) {
+                params.set("version", verEl.value);
+            }
+        }
+        const qs = params.toString();
+        const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+        const stateObj = {
+            entity: entity,
+            id: id,
+            version: params.get("version") || ""
+        };
+
+        if (pushHistory) {
+            const currentUrl = `${window.location.pathname}${window.location.search}`;
+            if (currentUrl !== newUrl) {
+                window.history.pushState(stateObj, "", newUrl);
+            }
+        } else {
+            window.history.replaceState(stateObj, "", newUrl);
+        }
+    }
+
+    window.addEventListener("popstate", (event) => {
+        let targetEntity = "constants";
+        let targetId = null;
+        let targetVersion = "";
+
+        if (event.state && event.state.entity) {
+            targetEntity = event.state.entity;
+            targetId = event.state.id;
+            targetVersion = event.state.version || "";
+        } else {
+            const params = new URLSearchParams(window.location.search);
+            targetEntity = params.get("entity") || "constants";
+            targetId = params.get("id");
+            targetVersion = params.get("version") || "";
+        }
+
+        if (targetVersion && document.getElementById("filter-version")) {
+            document.getElementById("filter-version").value = targetVersion;
+        }
+
+        if (targetEntity !== state.entity) {
+            switchEntity(targetEntity, targetId, false);
+        } else if (targetId && targetId !== state.selectedId) {
+            selectItem(targetId, false);
+        }
+    });
+
+    async function switchEntity(entity, targetId = null, pushHistory = true) {
         state.entity = entity;
         document.querySelectorAll(".entity-tab").forEach(btn => {
             btn.classList.toggle("active", btn.dataset.entity === entity);
@@ -475,14 +530,14 @@
         document.getElementById("generic-filter-meta").style.display = entity === "constants" ? "none" : "flex";
         document.getElementById("explorer-search").value = "";
 
-        await fetchEntityList(targetId);
+        await fetchEntityList(targetId, pushHistory);
     }
 
     async function reloadConstantsForVersion() {
-        await fetchEntityList(state.selectedId);
+        await fetchEntityList(state.selectedId, true);
     }
 
-    async function fetchEntityList(targetId = null) {
+    async function fetchEntityList(targetId = null, pushHistory = true) {
         const listEl = document.getElementById("explorer-list");
         listEl.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--muted);">Loading...</div>`;
 
@@ -500,10 +555,10 @@
         const resp = await fetch(url, { headers: { "Accept": "application/json" } });
         state.items = await resp.json();
         document.getElementById(`tab-count-${state.entity}`).textContent = state.items.length;
-        applyFilters(targetId);
+        applyFilters(targetId, pushHistory);
     }
 
-    function applyFilters(targetId = null) {
+    function applyFilters(targetId = null, pushHistory = true) {
         const q = document.getElementById("explorer-search").value.trim().toLowerCase();
         const role = document.getElementById("filter-role").value;
         const prec = document.getElementById("filter-precision").value;
@@ -540,10 +595,10 @@
         renderSidebarList();
 
         if (targetId && state.filtered.some(x => x.id === targetId)) {
-            selectItem(targetId);
+            selectItem(targetId, pushHistory);
         } else if (state.filtered.length > 0) {
             const keepCurrent = state.selectedId && state.filtered.some(x => x.id === state.selectedId);
-            selectItem(keepCurrent ? state.selectedId : state.filtered[0].id);
+            selectItem(keepCurrent ? state.selectedId : state.filtered[0].id, pushHistory);
         } else {
             document.getElementById("explorer-detail").innerHTML = `
                 <div style="padding: 3rem; text-align: center; color: var(--muted);">No matching items found.</div>
@@ -629,11 +684,18 @@
         renderAllMath(listEl);
     }
 
-    async function selectItem(id) {
+    async function selectItem(id, pushHistory = true) {
         state.selectedId = id;
         document.querySelectorAll(".list-item").forEach(el => {
             el.classList.toggle("active", el.id === `row-${id}`);
         });
+
+        const activeRow = document.getElementById(`row-${id}`);
+        if (activeRow) {
+            activeRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+
+        updateBrowserUrl(state.entity, id, pushHistory);
 
         const detailEl = document.getElementById("explorer-detail");
         const endpoint = `${ROOT_PATH}/${ENTITY_ENDPOINTS[state.entity]}/${encodeURIComponent(id)}`;
@@ -657,6 +719,9 @@
         }
 
         renderAllMath(detailEl);
+
+        const itemName = item.name || item.id;
+        document.title = `${itemName} - Knowledge Explorer - CODATA Fundamental Physical Constants`;
     }
 
     function renderFormatPills(endpoint) {
@@ -1004,8 +1069,12 @@
     document.addEventListener("DOMContentLoaded", () => {
         const params = new URLSearchParams(window.location.search);
         const ent = params.get("entity") || "constants";
-        const id = params.get("id") || "FaradayConstant";
-        switchEntity(ent, id);
+        const id = params.get("id") || (ent === "constants" ? "FaradayConstant" : null);
+        const ver = params.get("version");
+        if (ver && document.getElementById("filter-version")) {
+            document.getElementById("filter-version").value = ver;
+        }
+        switchEntity(ent, id, false);
     });
 </script>
 {% endblock %}
