@@ -223,8 +223,7 @@
             font-size: 0.95rem;
         }
 
-        code,
-        .mono {
+        code, .mono {
             background: #f1f5f9;
             padding: 0.15rem 0.45rem;
             border-radius: 4px;
@@ -284,77 +283,22 @@
             white-space: nowrap;
         }
 
-        .badge-quantity {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        .badge-concept {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .badge-deprecated {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fecaca;
-        }
+        .badge-quantity { background: #dbeafe; color: #1e40af; }
+        .badge-concept { background: #dcfce7; color: #166534; }
+        .badge-deprecated { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 
         /* Determination Role Badges */
-        .role-defining {
-            background: #dcfce7;
-            color: #166534;
-            border: 1px solid #bbf7d0;
-        }
-
-        .role-computed_exact {
-            background: #dbeafe;
-            color: #1e40af;
-            border: 1px solid #bfdbfe;
-        }
-
-        .role-adjusted {
-            background: #fef3c7;
-            color: #92400e;
-            border: 1px solid #fde68a;
-        }
-
-        .role-computed_derived {
-            background: #f3e8ff;
-            color: #6b21a8;
-            border: 1px solid #e9d5ff;
-        }
+        .role-defining { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .role-computed_exact { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+        .role-adjusted { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .role-computed_derived { background: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff; }
 
         /* Storage & Source Badges */
-        .type-float32 {
-            background: #ecfdf5;
-            color: #047857;
-            border: 1px solid #a7f3d0;
-        }
-
-        .type-float64 {
-            background: #eff6ff;
-            color: #1d4ed8;
-            border: 1px solid #bfdbfe;
-        }
-
-        .type-decimal {
-            background: #fff7ed;
-            color: #c2410c;
-            border: 1px solid #fed7aa;
-        }
-
-        .source-computed {
-            background: #e0e7ff;
-            color: #3730a3;
-            border: 1px solid #c7d2fe;
-        }
-
-        .source-nist {
-            background: #f1f5f9;
-            color: #475569;
-            border: 1px solid #cbd5e1;
-        }
+        .type-float32 { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+        .type-float64 { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+        .type-decimal { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+        .source-computed { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
+        .source-nist { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 
         .chip-list {
             display: flex;
@@ -541,24 +485,15 @@
     <nav>
         <div class="container">
             <ul>
-                <li><a href="{{ root_path }}/" {% if current_path=='/' %} class="active" {% endif %}>Developer
-                        Portal</a></li>
-                <li><a href="{{ root_path }}/explorer" {% if current_path.startswith('/explorer') %} class="active" {%
-                        endif %}>Explorer (Viewer)</a></li>
-                <li><a href="{{ root_path }}/constants" {% if current_path.startswith('/constants') and not
-                        current_path.startswith('/constants/versions') %} class="active" {% endif %}>Constants</a></li>
-                <li><a href="{{ root_path }}/quantities" {% if current_path.startswith('/quantities') %} class="active"
-                        {% endif %}>Quantities</a></li>
-                <li><a href="{{ root_path }}/concepts" {% if current_path.startswith('/concepts') %} class="active" {%
-                        endif %}>Concepts</a></li>
-                <li><a href="{{ root_path }}/units" {% if current_path.startswith('/units') %} class="active" {% endif
-                        %}>Units</a></li>
-                <li><a href="{{ root_path }}/constants/versions" {% if current_path.startswith('/constants/versions') %}
-                        class="active" {% endif %}>Versions</a></li>
-                <li><a href="{{ root_path }}/sparql" {% if current_path.startswith('/sparql') %} class="active" {% endif
-                        %}>SPARQL</a></li>
-                <li><a href="{{ root_path }}/ontology" target="_blank" {% if current_path.startswith('/ontology') %}
-                        class="active" {% endif %}>OWL Ontology</a></li>
+                <li><a href="{{ root_path }}/"{% if current_path == '/' %} class="active"{% endif %}>Developer Portal</a></li>
+                <li><a href="{{ root_path }}/explorer"{% if current_path.startswith('/explorer') %} class="active"{% endif %}>Explorer (Viewer)</a></li>
+                <li><a href="{{ root_path }}/constants"{% if current_path.startswith('/constants') and not current_path.startswith('/constants/versions') %} class="active"{% endif %}>Constants</a></li>
+                <li><a href="{{ root_path }}/quantities"{% if current_path.startswith('/quantities') %} class="active"{% endif %}>Quantities</a></li>
+                <li><a href="{{ root_path }}/concepts"{% if current_path.startswith('/concepts') %} class="active"{% endif %}>Concepts</a></li>
+                <li><a href="{{ root_path }}/units"{% if current_path.startswith('/units') %} class="active"{% endif %}>Units</a></li>
+                <li><a href="{{ root_path }}/constants/versions"{% if current_path.startswith('/constants/versions') %} class="active"{% endif %}>Versions</a></li>
+                <li><a href="{{ root_path }}/sparql"{% if current_path.startswith('/sparql') %} class="active"{% endif %}>SPARQL</a></li>
+                <li><a href="{{ root_path }}/ontology" target="_blank"{% if current_path.startswith('/ontology') %} class="active"{% endif %}>OWL Ontology</a></li>
             </ul>
         </div>
     </nav>
@@ -566,22 +501,17 @@
     <div class="container">
         <div class="warning-banner">
             <span>⚠️ Experimental edition (for evaluation only) — Schema &amp; API v0.5.0</span>
-            <span style="font-weight: 500; font-size: 0.82rem;">Two-Source Precision (34-digit Computed + Verbatim NIST)
-                &middot; Per-Release SI Roles (1998–2022)</span>
+            <span style="font-weight: 500; font-size: 0.82rem;">Two-Source Precision (34-digit Computed + Verbatim NIST) &middot; Per-Release SI Roles (1998–2022)</span>
         </div>
         {% block format_links %}
         {% if request %}
         <div class="format-links">
             <strong>Content Negotiation (View as):</strong>
             <a href="{{ root_path }}{{ request.url.path }}?format=json" target="_blank" title="JSON format">JSON</a>
-            <a href="{{ root_path }}{{ request.url.path }}?format=jsonld" target="_blank"
-                title="JSON-LD format">JSON-LD</a>
-            <a href="{{ root_path }}{{ request.url.path }}?format=turtle" target="_blank"
-                title="Turtle RDF format">Turtle</a>
-            <a href="{{ root_path }}{{ request.url.path }}?format=rdfxml" target="_blank"
-                title="RDF/XML format">RDF/XML</a>
-            <a href="{{ root_path }}{{ request.url.path }}?format=ntriples" target="_blank"
-                title="N-Triples format">N-Triples</a>
+            <a href="{{ root_path }}{{ request.url.path }}?format=jsonld" target="_blank" title="JSON-LD format">JSON-LD</a>
+            <a href="{{ root_path }}{{ request.url.path }}?format=turtle" target="_blank" title="Turtle RDF format">Turtle</a>
+            <a href="{{ root_path }}{{ request.url.path }}?format=rdfxml" target="_blank" title="RDF/XML format">RDF/XML</a>
+            <a href="{{ root_path }}{{ request.url.path }}?format=ntriples" target="_blank" title="N-Triples format">N-Triples</a>
             <a href="{{ root_path }}{{ request.url.path }}?format=n3" target="_blank" title="Notation3 format">N3</a>
         </div>
         {% endif %}
