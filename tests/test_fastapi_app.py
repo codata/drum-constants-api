@@ -30,6 +30,30 @@ def test_index_json_and_html(client):
     assert "/playground" not in html_resp.text
 
 
+def test_active_navigation_highlighting(client):
+    """Verify that each page highlights only its corresponding navigation link."""
+    import re
+
+    routes = [
+        ("/", "Developer Portal"),
+        ("/explorer", "Explorer (Viewer)"),
+        ("/constants", "Constants"),
+        ("/constants/FaradayConstant", "Constants"),
+        ("/constants/versions", "Versions"),
+        ("/quantities", "Quantities"),
+        ("/concepts", "Concepts"),
+        ("/units", "Units"),
+        ("/sparql", "SPARQL"),
+    ]
+    for path, expected_label in routes:
+        resp = client.get(path, headers={"Accept": "text/html"})
+        assert resp.status_code == 200
+        nav_match = re.search(r"<nav.*?</nav>", resp.text, re.DOTALL)
+        assert nav_match, f"No nav element found in response for {path}"
+        actives = re.findall(r"<a [^>]*class=\"active\"[^>]*>(.*?)</a>", nav_match.group(0))
+        assert actives == [expected_label], f"Expected [{expected_label}] active for {path}, got {actives}"
+
+
 def test_api_version(client):
     """Verify package and OpenAPI version is 0.5.0."""
     from src import __version__
