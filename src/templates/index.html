@@ -140,6 +140,9 @@
         padding: 1.5rem;
         margin-bottom: 2rem;
         border: 1px solid #1e293b;
+        box-sizing: border-box;
+        max-width: 100%;
+        overflow: hidden;
     }
 
     .sandbox-header {
@@ -148,7 +151,7 @@
         align-items: center;
         flex-wrap: wrap;
         gap: 1rem;
-        margin-bottom: 1rem;
+        margin-bottom: 1.1rem;
     }
 
     .sandbox-header h3 {
@@ -157,17 +160,89 @@
         font-size: 1.2rem;
     }
 
-    .sandbox-controls {
-        display: grid;
-        grid-template-columns: 1.5fr 1.5fr 1fr auto;
-        gap: 0.65rem;
-        margin-bottom: 1rem;
+    .sandbox-preset-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+        min-width: 0;
     }
 
-    @media (max-width: 900px) {
-        .sandbox-controls {
-            grid-template-columns: 1fr;
-        }
+    .sandbox-preset-label {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #94a3b8;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .sandbox-preset-row .sandbox-select {
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .sandbox-request-row {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        margin-bottom: 1.25rem;
+        min-width: 0;
+    }
+
+    .sandbox-endpoint-group {
+        display: flex;
+        align-items: center;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        flex: 1;
+        min-width: 0;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .sandbox-endpoint-group:focus-within {
+        border-color: #3b5bdb;
+        box-shadow: 0 0 0 1px #3b5bdb;
+    }
+
+    .sandbox-method-badge {
+        background: #0d9488;
+        color: #ffffff;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 0.25rem 0.55rem;
+        border-radius: 4px;
+        margin-left: 0.45rem;
+        letter-spacing: 0.05em;
+        flex-shrink: 0;
+        user-select: none;
+    }
+
+    .sandbox-endpoint-group .sandbox-input {
+        border: none;
+        background: transparent;
+        padding: 0.55rem 0.75rem;
+        color: #f8fafc;
+        font-size: 0.88rem;
+        font-family: 'SF Mono', Menlo, Consolas, monospace;
+        flex: 1;
+        min-width: 0;
+        outline: none;
+        width: 100%;
+    }
+
+    .sandbox-action-group {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        flex-shrink: 0;
+        min-width: 0;
+    }
+
+    .sandbox-format-select {
+        min-width: 190px;
+        max-width: 250px;
     }
 
     .sandbox-input, .sandbox-select {
@@ -178,6 +253,14 @@
         padding: 0.55rem 0.75rem;
         font-size: 0.88rem;
         font-family: 'SF Mono', Menlo, Consolas, monospace;
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .sandbox-select:focus, .sandbox-input:focus {
+        outline: none;
+        border-color: #3b5bdb;
     }
 
     .sandbox-btn {
@@ -185,10 +268,16 @@
         color: white;
         border: none;
         border-radius: 6px;
-        padding: 0.55rem 1.1rem;
+        padding: 0.55rem 1.15rem;
         font-weight: 600;
         cursor: pointer;
         font-size: 0.88rem;
+        white-space: nowrap;
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: background-color 0.15s ease;
     }
 
     .sandbox-btn:hover {
@@ -197,20 +286,47 @@
 
     .sandbox-split {
         display: grid;
-        grid-template-columns: 1fr 1.2fr;
-        gap: 1rem;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+        gap: 1.25rem;
+        min-width: 0;
+        align-items: stretch;
     }
 
-    @media (max-width: 900px) {
-        .sandbox-split {
-            grid-template-columns: 1fr;
-        }
+    .sandbox-split > div {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sandbox-box-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.45rem;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
+    .sandbox-status-text {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #94a3b8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+    }
+
+    .copy-action-btn {
+        flex-shrink: 0;
     }
 
     .code-tabs {
         display: flex;
         gap: 0.35rem;
-        margin-bottom: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+        min-width: 0;
     }
 
     .code-tab {
@@ -222,6 +338,14 @@
         font-size: 0.78rem;
         font-weight: 600;
         cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: all 0.15s ease;
+    }
+
+    .code-tab:hover {
+        color: #f8fafc;
+        border-color: #475569;
     }
 
     .code-tab.active {
@@ -239,9 +363,57 @@
         font-size: 0.8rem;
         color: #e2e8f0;
         overflow-x: auto;
+        height: 350px;
         max-height: 350px;
         overflow-y: auto;
         white-space: pre;
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+    }
+
+    @media (max-width: 900px) {
+        .sandbox-request-row {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .sandbox-action-group {
+            width: 100%;
+        }
+
+        .sandbox-format-select {
+            flex: 1;
+            max-width: none;
+        }
+
+        .sandbox-split {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        #sb-code {
+            height: auto;
+            min-height: 160px;
+            max-height: 260px;
+        }
+    }
+
+    @media (max-width: 600px) {
+        .sandbox-preset-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.35rem;
+        }
+
+        .sandbox-action-group {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .sandbox-btn {
+            justify-content: center;
+        }
     }
 
     .resource-cards {
@@ -355,7 +527,8 @@
         </div>
     </div>
 
-    <div class="sandbox-controls">
+    <div class="sandbox-preset-row">
+        <label for="sb-preset" class="sandbox-preset-label">Example Preset:</label>
         <select id="sb-preset" class="sandbox-select" onchange="applyPreset()">
             <option value="/constants/FaradayConstant">1. Faraday Constant (Exact Rational Recovery + DAG)</option>
             <option value="/constants/ReducedPlanckConstant">2. Reduced Planck Constant (34-Digit Computed vs NIST)</option>
@@ -368,33 +541,41 @@
             <option value="/units/J_s">9. Unit Detail: Joule Second (SI &amp; UCUM Crosswalks)</option>
             <option value="/health">10. Service Health &amp; Knowledge Graph Metrics</option>
         </select>
-        <input type="text" id="sb-path" class="sandbox-input" value="/constants/FaradayConstant" oninput="updateCodeSnippets()">
-        <select id="sb-format" class="sandbox-select" onchange="runSandboxRequest()">
-            <option value="application/json">Accept: application/json</option>
-            <option value="application/ld+json">Accept: application/ld+json (JSON-LD)</option>
-            <option value="text/turtle">Accept: text/turtle (High-Precision RDF)</option>
-            <option value="application/n-triples">Accept: application/n-triples</option>
-            <option value="application/rdf+xml">Accept: application/rdf+xml</option>
-        </select>
-        <button type="button" class="sandbox-btn" onclick="runSandboxRequest()">▶ Send Request</button>
+    </div>
+
+    <div class="sandbox-request-row">
+        <div class="sandbox-endpoint-group">
+            <span class="sandbox-method-badge">GET</span>
+            <input type="text" id="sb-path" class="sandbox-input" value="/constants/FaradayConstant" oninput="updateCodeSnippets()" spellcheck="false" aria-label="API Endpoint Path">
+        </div>
+        <div class="sandbox-action-group">
+            <select id="sb-format" class="sandbox-select sandbox-format-select" onchange="runSandboxRequest()" aria-label="Accept Header">
+                <option value="application/json">Accept: application/json</option>
+                <option value="application/ld+json">Accept: application/ld+json (JSON-LD)</option>
+                <option value="text/turtle">Accept: text/turtle (High-Precision RDF)</option>
+                <option value="application/n-triples">Accept: application/n-triples</option>
+                <option value="application/rdf+xml">Accept: application/rdf+xml</option>
+            </select>
+            <button type="button" class="sandbox-btn" onclick="runSandboxRequest()">▶ Send Request</button>
+        </div>
     </div>
 
     <div class="sandbox-split">
         <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
+            <div class="sandbox-box-header">
                 <div class="code-tabs">
                     <button type="button" class="code-tab active" data-lang="curl" onclick="switchCodeLang('curl')">cURL</button>
                     <button type="button" class="code-tab" data-lang="python" onclick="switchCodeLang('python')">Python (Decimal)</button>
                     <button type="button" class="code-tab" data-lang="js" onclick="switchCodeLang('js')">JavaScript</button>
                 </div>
-                <button type="button" class="code-tab" onclick="copyToClipboard('sb-code', this)">Copy Code</button>
+                <button type="button" class="code-tab copy-action-btn" onclick="copyToClipboard('sb-code', this)">Copy Code</button>
             </div>
             <pre class="code-box" id="sb-code"></pre>
         </div>
         <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
-                <span style="font-size:0.8rem;font-weight:600;color:#94a3b8;" id="sb-status">Live Response Preview</span>
-                <button type="button" class="code-tab" onclick="copyToClipboard('sb-response', this)">Copy Response</button>
+            <div class="sandbox-box-header">
+                <span class="sandbox-status-text" id="sb-status">Live Response Preview</span>
+                <button type="button" class="code-tab copy-action-btn" onclick="copyToClipboard('sb-response', this)">Copy Response</button>
             </div>
             <pre class="code-box" id="sb-response">Loading...</pre>
         </div>
