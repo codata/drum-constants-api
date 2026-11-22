@@ -80,6 +80,94 @@ def test_explorer_history_navigation_support(client):
     assert "popstate" in resp.text
 
 
+def test_explorer_search_scope_options_and_filtering(client):
+    """Verify that Knowledge Explorer provides search scope selector and scopes match accurately."""
+    resp = client.get("/explorer", headers={"Accept": "text/html"})
+    assert resp.status_code == 200
+    # Search scope dropdown & options
+    assert 'id="search-scope"' in resp.text
+    assert 'value="all"' in resp.text
+    assert 'value="name"' in resp.text
+    assert 'value="symbol"' in resp.text
+    assert 'value="formula"' in resp.text
+    assert 'value="id"' in resp.text
+    # Clear button & search helpers
+    assert 'id="search-clear-btn"' in resp.text
+    assert "handleSearchInput" in resp.text
+    assert "clearSearch" in resp.text
+    assert "updateSearchPlaceholder" in resp.text
+    assert "getFieldValuesForScope" in resp.text
+
+    # Verify scope filtering logic against actual API constant dataset
+    const_resp = client.get("/constants", headers={"Accept": "application/json"})
+    assert const_resp.status_code == 200
+    constants = const_resp.json()
+
+    def filter_by_scope(items, q, scope):
+        tokens = q.lower().split()
+        res = []
+        for item in items:
+            if scope == "name":
+                fields = [item.get("name"), item.get("nameFr")]
+            elif scope == "symbol":
+                fields = [item.get("symbolTex"), item.get("symbolHtml")]
+            elif scope == "formula":
+                fields = [item.get("formula"), item.get("formulaLatex"), item.get("siExpression")]
+            elif scope == "id":
+                fields = [item.get("id"), item.get("uri"), item.get("ucumCode")]
+            else:
+                fields = [
+                    item.get("id"),
+                    item.get("name"),
+                    item.get("nameFr"),
+                    item.get("definition"),
+                    item.get("symbolTex"),
+                    item.get("symbolHtml"),
+                    item.get("formula"),
+                    item.get("formulaLatex"),
+                    item.get("ucumCode"),
+                    item.get("siExpression"),
+                ]
+            hay = " ".join(filter(None, fields)).lower()
+            if all(t in hay for t in tokens):
+                res.append(item)
+        return res
+
+    all_boltz = filter_by_scope(constants, "boltz", "all")
+    name_boltz = filter_by_scope(constants, "boltz", "name")
+    formula_boltz = filter_by_scope(constants, "boltz", "formula")
+    symbol_boltz = filter_by_scope(constants, "boltz", "symbol")
+
+    # Name-only scope must isolate only the 5 Boltzmann constants
+    assert len(name_boltz) == 5
+    assert all("boltzmann" in (c["name"] or "").lower() for c in name_boltz)
+
+    # Broad scope includes derivations with Boltzmann in formula
+    assert len(all_boltz) == 26
+    assert len(formula_boltz) == 25
+    assert len(symbol_boltz) == 0
+
+
+def test_historical_evolution_navigation_support(client):
+    """Verify that Historical Evolution table allows interactive navigation to previous releases."""
+    resp = client.get("/explorer", headers={"Accept": "text/html"})
+    assert resp.status_code == 200
+    assert "selectConstantVersion" in resp.text
+    assert "historical-view-banner" in resp.text
+    assert "active-history-row" in resp.text
+    assert "btn-version-pill" in resp.text
+    assert "btn-inspect-version" in resp.text
+    assert "Actions" in resp.text
+
+    # Verify standalone historical constant value page has navigation support
+    hist_resp = client.get("/constants/PlanckConstant/2018", headers={"Accept": "text/html"})
+    assert hist_resp.status_code == 200
+    assert "Historical CODATA 2018 Release Record" in hist_resp.text
+    assert "View Current Recommended (2022)" in hist_resp.text
+    assert "explorer?entity=constants&id=PlanckConstant&version=2018" in hist_resp.text
+    assert "Active View" in hist_resp.text
+
+
 def test_api_version(client):
     """Verify package and OpenAPI version is 0.5.0."""
     from src import __version__

@@ -116,16 +116,82 @@
         background: white;
     }
 
+    .search-bar-row {
+        display: flex;
+        gap: 0.45rem;
+        align-items: center;
+    }
+
+    .search-input-wrap {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 0.65rem;
+        width: 0.95rem;
+        height: 0.95rem;
+        color: #94a3b8;
+        pointer-events: none;
+    }
+
     .search-input {
         width: 100%;
-        padding: 0.5rem 0.75rem;
+        padding: 0.45rem 1.6rem 0.45rem 1.95rem;
         border: 1px solid #cbd5e1;
         border-radius: 6px;
-        font-size: 0.88rem;
+        font-size: 0.85rem;
         outline: none;
+        background: white;
+        transition: border-color 0.15s, box-shadow 0.15s;
     }
 
     .search-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px rgba(59, 91, 219, 0.15);
+    }
+
+    .search-clear-btn {
+        position: absolute;
+        right: 0.45rem;
+        background: none;
+        border: none;
+        color: #94a3b8;
+        cursor: pointer;
+        font-size: 1.1rem;
+        line-height: 1;
+        padding: 0.15rem 0.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+    }
+
+    .search-clear-btn:hover {
+        color: #334155;
+        background: #f1f5f9;
+    }
+
+    .search-scope-select {
+        width: auto;
+        min-width: 105px;
+        max-width: 120px;
+        padding: 0.45rem 0.45rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        background: #f8fafc;
+        color: #334155;
+        flex-shrink: 0;
+        cursor: pointer;
+    }
+
+    .search-scope-select:focus {
         border-color: var(--primary);
         box-shadow: 0 0 0 2px rgba(59, 91, 219, 0.15);
     }
@@ -314,6 +380,112 @@
         flex-wrap: wrap;
         gap: 0.75rem;
     }
+
+    .historical-view-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        padding: 0.65rem 0.95rem;
+        margin-bottom: 1rem;
+        font-size: 0.88rem;
+        color: #92400e;
+    }
+
+    .btn-return-latest {
+        background: #f59e0b;
+        color: white;
+        border: none;
+        padding: 0.35rem 0.75rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+    }
+
+    .btn-return-latest:hover {
+        background: #d97706;
+    }
+
+    .btn-return-latest:active {
+        transform: translateY(1px);
+    }
+
+    .history-row {
+        cursor: pointer;
+        transition: background-color 0.15s;
+    }
+
+    .history-row:hover {
+        background: #f1f5f9;
+    }
+
+    .active-history-row {
+        background: #eff6ff !important;
+        font-weight: 500;
+    }
+
+    .active-history-row td:first-child {
+        border-left: 3px solid var(--primary);
+    }
+
+    .btn-version-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.25rem 0.65rem;
+        background: white;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        color: #1e3a8a;
+        transition: all 0.15s;
+    }
+
+    .btn-version-pill:hover {
+        background: #eef2ff;
+        border-color: #3b5bdb;
+    }
+
+    .btn-version-pill-active {
+        background: #3b5bdb;
+        color: white;
+        border-color: #3b5bdb;
+    }
+
+    .btn-version-pill-active:hover {
+        background: #2f49b0;
+    }
+
+    .btn-version-pill .active-dot {
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: #bbf7d0;
+    }
+
+    .btn-inspect-version {
+        background: #eef2ff;
+        color: #1e3a8a;
+        border: 1px solid #c7d2fe;
+        padding: 0.25rem 0.65rem;
+        border-radius: 6px;
+        font-size: 0.76rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .btn-inspect-version:hover {
+        background: #3b5bdb;
+        color: white;
+        border-color: #3b5bdb;
+    }
 </style>
 {% endblock %}
 
@@ -349,8 +521,26 @@
 <div class="explorer-shell">
     <aside class="explorer-sidebar">
         <div class="filter-panel">
-            <input type="text" id="explorer-search" class="search-input"
-                placeholder="Search by name, symbol, ID, or formula..." oninput="applyFilters()">
+            <div class="search-bar-row">
+                <div class="search-input-wrap">
+                    <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
+                    </svg>
+                    <input type="text" id="explorer-search" class="search-input"
+                        placeholder="Search constants..." oninput="handleSearchInput()"
+                        onkeydown="if(event.key==='Escape'){clearSearch();}">
+                    <button type="button" id="search-clear-btn" class="search-clear-btn"
+                        onclick="clearSearch()" title="Clear search" aria-label="Clear search" style="display: none;">&times;</button>
+                </div>
+                <select id="search-scope" class="filter-select search-scope-select"
+                    onchange="updateSearchPlaceholder(); applyFilters();" title="Search Scope">
+                    <option value="all">All Fields</option>
+                    <option value="name">Name Only</option>
+                    <option value="symbol">Symbol Only</option>
+                    <option value="formula">Formula Only</option>
+                    <option value="id">ID Only</option>
+                </select>
+            </div>
             <div id="constant-filters">
                 <div class="filter-row" style="margin-bottom: 0.45rem;">
                     <select id="filter-version" class="filter-select" onchange="reloadConstantsForVersion()">
@@ -428,8 +618,28 @@
         entity: "constants",
         items: [],
         filtered: [],
-        selectedId: null
+        selectedId: null,
+        currentConstant: null,
+        currentVersion: ""
     };
+
+    function selectConstantVersion(versionId, pushHistory = true) {
+        state.currentVersion = versionId || "";
+        const verEl = document.getElementById("filter-version");
+        if (verEl) {
+            verEl.value = versionId || "";
+        }
+
+        updateBrowserUrl("constants", state.selectedId, pushHistory);
+
+        if (state.currentConstant) {
+            const detailEl = document.getElementById("explorer-detail");
+            const endpoint = `${ROOT_PATH}/constants/${encodeURIComponent(state.selectedId)}`;
+            renderConstantDetail(detailEl, state.currentConstant, endpoint);
+            renderAllMath(detailEl);
+            detailEl.scrollTo({ top: 0, behavior: "smooth" });
+        }
+    }
 
     function escapeHtml(s) {
         if (s === null || s === undefined) return "";
@@ -471,17 +681,27 @@
         if (entity) params.set("entity", entity);
         if (id) params.set("id", id);
         if (entity === "constants") {
-            const verEl = document.getElementById("filter-version");
-            if (verEl && verEl.value) {
-                params.set("version", verEl.value);
+            const ver = state.currentVersion || (document.getElementById("filter-version") ? document.getElementById("filter-version").value : "");
+            if (ver) {
+                params.set("version", ver);
             }
+        }
+        const qEl = document.getElementById("explorer-search");
+        if (qEl && qEl.value.trim()) {
+            params.set("q", qEl.value.trim());
+        }
+        const scopeEl = document.getElementById("search-scope");
+        if (scopeEl && scopeEl.value && scopeEl.value !== "all") {
+            params.set("scope", scopeEl.value);
         }
         const qs = params.toString();
         const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
         const stateObj = {
             entity: entity,
             id: id,
-            version: params.get("version") || ""
+            version: params.get("version") || "",
+            q: params.get("q") || "",
+            scope: params.get("scope") || "all"
         };
 
         if (pushHistory) {
@@ -498,28 +718,122 @@
         let targetEntity = "constants";
         let targetId = null;
         let targetVersion = "";
+        let targetQ = "";
+        let targetScope = "all";
 
         if (event.state && event.state.entity) {
             targetEntity = event.state.entity;
             targetId = event.state.id;
             targetVersion = event.state.version || "";
+            targetQ = event.state.q || "";
+            targetScope = event.state.scope || "all";
         } else {
             const params = new URLSearchParams(window.location.search);
             targetEntity = params.get("entity") || "constants";
             targetId = params.get("id");
             targetVersion = params.get("version") || "";
+            targetQ = params.get("q") || "";
+            targetScope = params.get("scope") || "all";
         }
 
-        if (targetVersion && document.getElementById("filter-version")) {
+        state.currentVersion = targetVersion;
+        if (document.getElementById("filter-version")) {
             document.getElementById("filter-version").value = targetVersion;
         }
+        if (document.getElementById("search-scope")) {
+            document.getElementById("search-scope").value = targetScope;
+        }
+        if (document.getElementById("explorer-search")) {
+            document.getElementById("explorer-search").value = targetQ;
+            const clearBtn = document.getElementById("search-clear-btn");
+            if (clearBtn) clearBtn.style.display = targetQ ? "inline-flex" : "none";
+        }
+        updateSearchPlaceholder();
 
         if (targetEntity !== state.entity) {
             switchEntity(targetEntity, targetId, false);
         } else if (targetId && targetId !== state.selectedId) {
             selectItem(targetId, false);
+        } else if (state.currentConstant) {
+            const detailEl = document.getElementById("explorer-detail");
+            const endpoint = `${ROOT_PATH}/constants/${encodeURIComponent(state.selectedId)}`;
+            renderConstantDetail(detailEl, state.currentConstant, endpoint);
+            renderAllMath(detailEl);
+        } else {
+            applyFilters(targetId, false);
         }
     });
+
+    function handleSearchInput() {
+        const q = document.getElementById("explorer-search").value;
+        const clearBtn = document.getElementById("search-clear-btn");
+        if (clearBtn) {
+            clearBtn.style.display = q.length > 0 ? "inline-flex" : "none";
+        }
+        applyFilters();
+    }
+
+    function clearSearch() {
+        const searchInput = document.getElementById("explorer-search");
+        searchInput.value = "";
+        const clearBtn = document.getElementById("search-clear-btn");
+        if (clearBtn) clearBtn.style.display = "none";
+        searchInput.focus();
+        applyFilters();
+    }
+
+    function updateSearchPlaceholder() {
+        const searchInput = document.getElementById("explorer-search");
+        if (!searchInput) return;
+        const scopeEl = document.getElementById("search-scope");
+        const scope = scopeEl ? scopeEl.value : "all";
+        const entityLabels = {
+            constants: "constants",
+            quantities: "quantities",
+            concepts: "concepts",
+            units: "units",
+            versions: "releases"
+        };
+        const entLabel = entityLabels[state.entity] || "items";
+
+        if (scope === "name") {
+            searchInput.placeholder = `Search ${entLabel} by name...`;
+        } else if (scope === "symbol") {
+            searchInput.placeholder = `Search by symbol or LaTeX...`;
+        } else if (scope === "formula") {
+            searchInput.placeholder = `Search by formula expression...`;
+        } else if (scope === "id") {
+            searchInput.placeholder = `Search by ID / URI / code...`;
+        } else {
+            searchInput.placeholder = `Search ${entLabel} (all fields)...`;
+        }
+    }
+
+    function getFieldValuesForScope(item, scope) {
+        if (!item) return [];
+        if (scope === "name") {
+            return [item.name, item.nameFr];
+        } else if (scope === "symbol") {
+            return [item.symbolTex, item.symbolHtml];
+        } else if (scope === "formula") {
+            return [item.formula, item.formulaLatex, item.siExpression];
+        } else if (scope === "id") {
+            return [item.id, item.uri, item.ucumCode];
+        } else {
+            return [
+                item.id,
+                item.name,
+                item.nameFr,
+                item.definition,
+                item.symbolTex,
+                item.symbolHtml,
+                item.formula,
+                item.formulaLatex,
+                item.ucumCode,
+                item.siExpression
+            ];
+        }
+    }
 
     async function switchEntity(entity, targetId = null, pushHistory = true) {
         state.entity = entity;
@@ -528,12 +842,20 @@
         });
         document.getElementById("constant-filters").style.display = entity === "constants" ? "block" : "none";
         document.getElementById("generic-filter-meta").style.display = entity === "constants" ? "none" : "flex";
-        document.getElementById("explorer-search").value = "";
+
+        if (pushHistory) {
+            document.getElementById("explorer-search").value = "";
+            const clearBtn = document.getElementById("search-clear-btn");
+            if (clearBtn) clearBtn.style.display = "none";
+        }
+        updateSearchPlaceholder();
 
         await fetchEntityList(targetId, pushHistory);
     }
 
     async function reloadConstantsForVersion() {
+        const verEl = document.getElementById("filter-version");
+        state.currentVersion = verEl ? verEl.value : "";
         await fetchEntityList(state.selectedId, true);
     }
 
@@ -559,23 +881,21 @@
     }
 
     function applyFilters(targetId = null, pushHistory = true) {
-        const q = document.getElementById("explorer-search").value.trim().toLowerCase();
+        const searchInput = document.getElementById("explorer-search");
+        const q = searchInput ? searchInput.value.trim().toLowerCase() : "";
+        const scopeEl = document.getElementById("search-scope");
+        const scope = scopeEl ? scopeEl.value : "all";
         const role = document.getElementById("filter-role").value;
         const prec = document.getElementById("filter-precision").value;
         const storage = document.getElementById("filter-storage").value;
 
+        const tokens = q ? q.split(/\s+/).filter(Boolean) : [];
+
         state.filtered = state.items.filter(item => {
-            if (q) {
-                const hay = [
-                    item.id,
-                    item.name,
-                    item.nameFr,
-                    item.symbolTex,
-                    item.formula,
-                    item.ucumCode,
-                    item.siExpression
-                ].filter(Boolean).join(" ").toLowerCase();
-                if (!hay.includes(q)) return false;
+            if (tokens.length > 0) {
+                const hay = getFieldValuesForScope(item, scope).filter(Boolean).join(" ").toLowerCase();
+                const matchesAll = tokens.every(tok => hay.includes(tok));
+                if (!matchesAll) return false;
             }
             if (state.entity === "constants") {
                 const v = item.value || {};
@@ -705,6 +1025,7 @@
             return;
         }
         const item = await resp.json();
+        state.currentConstant = item;
 
         if (state.entity === "constants") {
             renderConstantDetail(detailEl, item, endpoint);
@@ -737,9 +1058,31 @@
     }
 
     function renderConstantDetail(pane, c, endpoint) {
-        const selectedVer = document.getElementById("filter-version").value;
+        state.currentConstant = c;
+        const selectedVer = state.currentVersion || (document.getElementById("filter-version") ? document.getElementById("filter-version").value : "");
         const allVals = [c.value, ...(c.historicalValues || [])].filter(Boolean);
-        const activeVal = (selectedVer && allVals.find(v => v.versionId === selectedVer)) || c.value || allVals[0];
+        const latestVal = c.value || allVals[0];
+        const activeVal = (selectedVer && allVals.find(v => v.versionId === selectedVer)) || latestVal;
+        const isHistorical = activeVal && latestVal && activeVal.versionId !== latestVal.versionId;
+
+        const historicalBannerHtml = isHistorical ? `
+            <div class="historical-view-banner">
+                <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                    <span style="font-size:1.15rem;">🕰️</span>
+                    <div>
+                        <strong>Viewing Historical CODATA ${escapeHtml(activeVal.versionId)} Value</strong>
+                        <span style="color:#64748b;font-size:0.83rem;margin-left:0.35rem;">(Latest official CODATA release is ${escapeHtml(latestVal.versionId)})</span>
+                    </div>
+                </div>
+                <button type="button" class="btn-return-latest" onclick="selectConstantVersion('${escapeHtml(latestVal.versionId)}')">
+                    Return to Latest (${escapeHtml(latestVal.versionId)}) →
+                </button>
+            </div>
+        ` : "";
+
+        const valueCardTitle = isHistorical
+            ? `CODATA ${escapeHtml(activeVal.versionId)} Release Value`
+            : `Recommended Value (${escapeHtml(activeVal?.versionId || 'Latest')})`;
 
         const symBadge = c.symbolTex
             ? `<span class="symbol-pill"><span class="tex-math" data-tex="${escapeHtml(c.symbolTex)}">${escapeHtml(c.symbolTex)}</span></span>`
@@ -802,25 +1145,54 @@
         }).join("");
 
         const historyRows = allVals.map(v => {
+            const isActive = activeVal && v.versionId === activeVal.versionId;
             const vRole = v.adjustmentRole ? `<span class="badge role-${escapeHtml(v.adjustmentRole)}">${escapeHtml(v.adjustmentRole)}</span>` : "—";
             const vSrc = v.valueSource ? `<span class="badge source-${escapeHtml(v.valueSource)}">${escapeHtml(v.valueSource)}</span>` : "—";
             const vType = v.recommendedNumericType ? `<span class="badge type-${escapeHtml(v.recommendedNumericType)}">${escapeHtml(v.recommendedNumericType)} (${v.significantDigits || '?'}d)</span>` : "—";
             return `
-                <tr>
-                    <td><strong>${escapeHtml(v.versionId)}</strong></td>
+                <tr class="history-row ${isActive ? 'active-history-row' : ''}" onclick="selectConstantVersion('${escapeHtml(v.versionId)}')">
+                    <td style="white-space: nowrap;">
+                        <button type="button" class="btn-version-pill ${isActive ? 'btn-version-pill-active' : ''}"
+                            onclick="event.stopPropagation(); selectConstantVersion('${escapeHtml(v.versionId)}')"
+                            title="Click to inspect ${escapeHtml(v.versionId)} value in Explorer">
+                            <strong>${escapeHtml(v.versionId)}</strong>
+                            ${isActive ? '<span class="active-dot">● Active</span>' : ''}
+                        </button>
+                    </td>
                     <td>${vRole}</td>
                     <td style="font-family:monospace;font-size:0.83rem;overflow-wrap:anywhere;word-break:break-word;">
                         ${formatScientificHtml(v.value)}
                         ${v.nistValue ? `<div style="font-size:0.75rem;color:var(--muted);">NIST: ${formatScientificHtml(v.nistValue)}${v.isNistTruncated ? '...' : ''}</div>` : ''}
                     </td>
-                    <td style="font-family:monospace;font-size:0.83rem;overflow-wrap:anywhere;">${v.isExact ? '<span class="badge role-defining" style="font-size:0.72rem;">Exact (u = 0)</span>' : (v.uncertainty ? '± ' + formatScientificHtml(v.uncertainty) : '—')}</td>
+                    <td style="font-family:monospace;font-size:0.83rem;overflow-wrap:anywhere;">
+                        ${v.isExact ? '<span class="badge role-defining" style="font-size:0.72rem;">Exact (u = 0)</span>' : (v.uncertainty ? '± ' + formatScientificHtml(v.uncertainty) : '—')}
+                    </td>
                     <td>${vSrc}</td>
                     <td>${vType}</td>
+                    <td style="text-align: right; white-space: nowrap;">
+                        ${isActive ? `
+                            <span class="badge" style="background:#22c55e;color:white;font-size:0.75rem;padding:0.25rem 0.55rem;">
+                                ✓ Active View
+                            </span>
+                        ` : `
+                            <button type="button" class="btn-inspect-version"
+                                onclick="event.stopPropagation(); selectConstantVersion('${escapeHtml(v.versionId)}')"
+                                title="Inspect ${escapeHtml(v.versionId)} value in Explorer">
+                                🔍 Inspect
+                            </button>
+                        `}
+                        <a href="${ROOT_PATH}/constants/${encodeURIComponent(c.id)}/${encodeURIComponent(v.versionId)}" target="_blank"
+                            class="chip" style="font-size:0.74rem;padding:0.18rem 0.45rem;margin-left:0.25rem;"
+                            onclick="event.stopPropagation();" title="Open standalone page for ${escapeHtml(v.versionId)} value in new tab">
+                            Page ↗
+                        </a>
+                    </td>
                 </tr>
             `;
         }).join("");
 
         pane.innerHTML = `
+            ${historicalBannerHtml}
             <div class="detail-header-box">
                 <div>
                     <div class="detail-title-row">
@@ -839,7 +1211,7 @@
 
             <div class="inspector-grid">
                 <div class="inspector-card">
-                    <h4>Recommended Value (${escapeHtml(activeVal?.versionId || 'Latest')})</h4>
+                    <h4>${valueCardTitle}</h4>
                     ${activeVal ? `
                         <div class="primary-value-box">
                             <span id="exp-val-str" class="primary-val-text" data-raw="${escapeHtml(activeVal.value)}">${formatScientificHtml(activeVal.value)}</span>
@@ -911,6 +1283,9 @@
             ` : ''}
 
             <h3 style="margin-top:0.5rem;">Historical Evolution Across CODATA Releases (${allVals.length})</h3>
+            <p style="font-size:0.83rem;color:var(--muted);margin-top:-0.3rem;margin-bottom:0.75rem;">
+                Click any year or row to inspect that release's value and metrological role in the viewer above.
+            </p>
             <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
                 <table class="data-table">
                     <thead>
@@ -921,6 +1296,7 @@
                             <th>Uncertainty</th>
                             <th>Source</th>
                             <th>Storage Type</th>
+                            <th style="text-align: right; min-width: 140px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>${historyRows}</tbody>
@@ -1071,9 +1447,22 @@
         const ent = params.get("entity") || "constants";
         const id = params.get("id") || (ent === "constants" ? "FaradayConstant" : null);
         const ver = params.get("version");
+        const qParam = params.get("q");
+        const scopeParam = params.get("scope");
+
+        state.currentVersion = ver || "";
         if (ver && document.getElementById("filter-version")) {
             document.getElementById("filter-version").value = ver;
         }
+        if (scopeParam && document.getElementById("search-scope")) {
+            document.getElementById("search-scope").value = scopeParam;
+        }
+        if (qParam && document.getElementById("explorer-search")) {
+            document.getElementById("explorer-search").value = qParam;
+            const clearBtn = document.getElementById("search-clear-btn");
+            if (clearBtn) clearBtn.style.display = "inline-flex";
+        }
+        updateSearchPlaceholder();
         switchEntity(ent, id, false);
     });
 </script>

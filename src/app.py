@@ -1347,9 +1347,12 @@ async def constant_value(id: str, versionId: str, request: Request):
             )
 
         cv_obj = _extract_constant_value(g, val_uri, include_version_obj=True)
-        const_obj = _extract_constant(g, c_uri, include_details=False, version_filter=versionId)
+        const_obj = _extract_constant(g, c_uri, include_details=True)
         if const_obj is not None:
+            all_vals = ([const_obj.value] if const_obj.value else []) + (const_obj.historicalValues or [])
+            all_vals.sort(key=lambda v: v.versionId, reverse=True)
             const_obj.value = cv_obj
+            const_obj.historicalValues = all_vals
             resource_data = const_obj.model_dump(exclude_none=True)
         else:
             resource_data = cv_obj.model_dump(exclude_none=True)
