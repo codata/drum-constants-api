@@ -428,7 +428,8 @@
         function copyToClipboard(elementId, btnEl) {
             const el = document.getElementById(elementId);
             if (!el) return;
-            copyRawText(el.textContent, btnEl);
+            const text = el.getAttribute('data-raw') || el.textContent;
+            copyRawText(text, btnEl);
         }
 
         function copyRawText(text, btnEl) {

@@ -54,6 +54,22 @@ def test_active_navigation_highlighting(client):
         assert actives == [expected_label], f"Expected [{expected_label}] active for {path}, got {actives}"
 
 
+def test_compact_number_filter_and_large_number_preservation(client):
+    """Verify that scientific numbers preserve their exponent in compact view and HTML."""
+    from src.app import _format_compact_number
+
+    # Large and small numbers with exponents must never lose the exponent
+    assert _format_compact_number("1.356392489652132101257636096714128e50") == "1.35639248965213…e50"
+    assert _format_compact_number("1.05457181764615639126242800330228e-34") == "1.0545718176461…e-34"
+    assert _format_compact_number("6.6446573450e-27") == "6.6446573450e-27"
+    assert _format_compact_number("96485.3321233100184") == "96485.3321233100184"
+
+    # HTML table should render compact numbers with exponents preserved
+    resp = client.get("/constants", headers={"Accept": "text/html"})
+    assert resp.status_code == 200
+    assert "e-27" in resp.text or "e-34" in resp.text
+
+
 def test_api_version(client):
     """Verify package and OpenAPI version is 0.5.0."""
     from src import __version__

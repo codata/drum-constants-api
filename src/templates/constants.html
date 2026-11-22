@@ -76,7 +76,7 @@
                     <td style="text-align: right; font-family: monospace; white-space: nowrap;">
                         {% if constant.value %}
                         <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
-                            {{ constant.value.value[:24] }}{% if constant.value.value|length > 24 %}…{% endif %}
+                            {{ constant.value.value | compact_number }}
                             <button type="button" onclick="copyRawText('{{ constant.value.value }}', this)" class="copy-btn" title="Copy full value">📋</button>
                         </span>
                         {% else %}—{% endif %}

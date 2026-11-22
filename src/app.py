@@ -6,6 +6,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import sys
 import time
 from typing import Any, List, Optional
@@ -195,6 +196,25 @@ async def add_root_path_from_forwarded_prefix(request: Request, call_next):
 # Configure Jinja2 templates
 templates_dir = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
+
+
+def _format_compact_number(val: str | None) -> str:
+    if not val:
+        return ""
+    s = str(val).strip()
+    match = re.match(r"^([+-]?\d+(?:\.\d+)?)[eE]([+-]?\d+)$", s)
+    if match:
+        mantissa, exp = match.groups()
+        if exp.startswith("+"):
+            exp = exp[1:]
+        max_m = max(8, 20 - len(exp) - 2)
+        if len(mantissa) > max_m:
+            mantissa = mantissa[:max_m] + "…"
+        return f"{mantissa}e{exp}"
+    return s[:24] + "…" if len(s) > 24 else s
+
+
+templates.env.filters["compact_number"] = _format_compact_number
 
 
 @app.exception_handler(StarletteHTTPException)

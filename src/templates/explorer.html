@@ -68,15 +68,32 @@
 
     .explorer-shell {
         display: grid;
-        grid-template-columns: 390px 1fr;
-        min-height: 740px;
-        max-height: calc(100vh - 210px);
+        grid-template-columns: 390px minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
+        height: calc(100vh - 210px);
+        min-height: 620px;
     }
 
     @media (max-width: 980px) {
         .explorer-shell {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-rows: auto auto;
+            height: auto;
+            min-height: auto;
             max-height: none;
+        }
+
+        .explorer-sidebar {
+            height: 480px;
+            max-height: 50vh;
+            border-right: none;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .explorer-detail {
+            height: auto;
+            min-height: auto;
+            overflow-y: visible;
         }
     }
 
@@ -86,6 +103,8 @@
         flex-direction: column;
         background: #fcfdff;
         overflow: hidden;
+        min-height: 0;
+        height: 100%;
     }
 
     .filter-panel {
@@ -188,6 +207,9 @@
         padding: 1.5rem 1.75rem;
         overflow-y: auto;
         background: white;
+        min-height: 0;
+        height: 100%;
+        box-sizing: border-box;
     }
 
     .detail-header-box {
@@ -244,18 +266,31 @@
 
     .primary-value-box {
         font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
-        font-size: 1.18rem;
+        font-size: 1.12rem;
         font-weight: 700;
         color: #1e3a8a;
-        word-break: break-all;
+        overflow-wrap: anywhere;
+        word-break: break-word;
         background: white;
-        padding: 0.6rem 0.8rem;
+        padding: 0.6rem 0.85rem;
         border-radius: 6px;
         border: 1px solid #cbd5e1;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 0.5rem;
+        gap: 0.75rem;
+    }
+
+    .primary-value-box .primary-val-text {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        min-width: 0;
+        flex: 1;
+        line-height: 1.4;
+    }
+
+    .primary-value-box .copy-btn {
+        flex-shrink: 0;
     }
 
     .two-source-callout {
@@ -403,6 +438,34 @@
         return div.innerHTML;
     }
 
+    function formatScientificHtml(val) {
+        if (val === null || val === undefined || val === "") return "";
+        const s = String(val).trim();
+        const match = s.match(/^([+-]?\d+(?:\.\d+)?)[eE]([+-]?\d+)$/);
+        if (match) {
+            let [, mantissa, exp] = match;
+            if (exp.startsWith("+")) exp = exp.slice(1);
+            return `${escapeHtml(mantissa)} <span style="color:#64748b;font-weight:normal;">&times; 10<sup>${escapeHtml(exp)}</sup></span>`;
+        }
+        return escapeHtml(s);
+    }
+
+    function formatCompactNumber(val) {
+        if (!val) return "";
+        const s = String(val).trim();
+        const match = s.match(/^([+-]?\d+(?:\.\d+)?)[eE]([+-]?\d+)$/);
+        if (match) {
+            let [, mantissa, exp] = match;
+            if (exp.startsWith("+")) exp = exp.slice(1);
+            const maxM = Math.max(8, 20 - exp.length - 2);
+            if (mantissa.length > maxM) {
+                mantissa = mantissa.slice(0, maxM) + "…";
+            }
+            return `${mantissa}e${exp}`;
+        }
+        return s.length > 22 ? s.slice(0, 22) + "…" : s;
+    }
+
     async function switchEntity(entity, targetId = null) {
         state.entity = entity;
         document.querySelectorAll(".entity-tab").forEach(btn => {
@@ -515,7 +578,7 @@
                             <span style="font-size:0.85rem;color:#1e3a8a;font-weight:600;">${symHtml}</span>
                         </div>
                         <div class="list-item-sub">
-                            <span style="font-family:monospace;">${escapeHtml(v.value ? (v.value.length > 22 ? v.value.slice(0, 22) + '…' : v.value) : item.id)}</span>
+                            <span style="font-family:monospace;">${formatCompactNumber(v.value) || escapeHtml(item.id)}</span>
                             <span style="display:flex;gap:0.25rem;">${roleBadge}${typeBadge}</span>
                         </div>
                     </div>
@@ -642,11 +705,11 @@
                 <div class="two-source-callout">
                     <div style="font-weight:700;color:#1e3a8a;margin-bottom:0.25rem;">✨ Two-Source Computed Precision Upgrade (${escapeHtml(activeVal.versionId)})</div>
                     <div style="margin-bottom:0.35rem;">${termText}</div>
-                    <div style="display:grid;grid-template-columns:auto 1fr;gap:0.25rem 0.75rem;font-size:0.82rem;">
-                        <span style="color:var(--muted);font-weight:600;">Canonical Value (${activeVal.significantDigits || ''} digits):</span>
-                        <code>${escapeHtml(activeVal.value)}</code>
-                        <span style="color:var(--muted);font-weight:600;">Original NIST Table String:</span>
-                        <code>${escapeHtml(activeVal.nistValue)}${activeVal.isNistTruncated ? '...' : ''}</code>
+                    <div style="display:grid;grid-template-columns:auto minmax(0, 1fr);gap:0.35rem 0.75rem;font-size:0.82rem;align-items:baseline;">
+                        <span style="color:var(--muted);font-weight:600;white-space:nowrap;">Canonical Value (${activeVal.significantDigits || ''} digits):</span>
+                        <code style="overflow-wrap:anywhere;word-break:break-word;">${formatScientificHtml(activeVal.value)}</code>
+                        <span style="color:var(--muted);font-weight:600;white-space:nowrap;">Original NIST Table String:</span>
+                        <code style="overflow-wrap:anywhere;word-break:break-word;">${formatScientificHtml(activeVal.nistValue)}${activeVal.isNistTruncated ? '...' : ''}</code>
                     </div>
                 </div>
             `;
@@ -681,11 +744,11 @@
                 <tr>
                     <td><strong>${escapeHtml(v.versionId)}</strong></td>
                     <td>${vRole}</td>
-                    <td style="font-family:monospace;font-size:0.83rem;word-break:break-all;">
-                        ${escapeHtml(v.value)}
-                        ${v.nistValue ? `<div style="font-size:0.75rem;color:var(--muted);">NIST: ${escapeHtml(v.nistValue)}${v.isNistTruncated ? '...' : ''}</div>` : ''}
+                    <td style="font-family:monospace;font-size:0.83rem;overflow-wrap:anywhere;word-break:break-word;">
+                        ${formatScientificHtml(v.value)}
+                        ${v.nistValue ? `<div style="font-size:0.75rem;color:var(--muted);">NIST: ${formatScientificHtml(v.nistValue)}${v.isNistTruncated ? '...' : ''}</div>` : ''}
                     </td>
-                    <td style="font-family:monospace;font-size:0.83rem;">${v.isExact ? '<span class="badge role-defining" style="font-size:0.72rem;">Exact (u = 0)</span>' : escapeHtml(v.uncertainty || '—')}</td>
+                    <td style="font-family:monospace;font-size:0.83rem;overflow-wrap:anywhere;">${v.isExact ? '<span class="badge role-defining" style="font-size:0.72rem;">Exact (u = 0)</span>' : (v.uncertainty ? '± ' + formatScientificHtml(v.uncertainty) : '—')}</td>
                     <td>${vSrc}</td>
                     <td>${vType}</td>
                 </tr>
@@ -714,11 +777,11 @@
                     <h4>Recommended Value (${escapeHtml(activeVal?.versionId || 'Latest')})</h4>
                     ${activeVal ? `
                         <div class="primary-value-box">
-                            <span id="exp-val-str">${escapeHtml(activeVal.value)}</span>
+                            <span id="exp-val-str" class="primary-val-text" data-raw="${escapeHtml(activeVal.value)}">${formatScientificHtml(activeVal.value)}</span>
                             <button type="button" class="copy-btn" onclick="copyToClipboard('exp-val-str', this)">Copy</button>
                         </div>
                         <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-top:0.6rem;font-size:0.88rem;">
-                            <div><strong>Uncertainty:</strong> ${activeVal.isExact ? '<span class="badge role-defining">Exact (u = 0)</span>' : `<code>± ${escapeHtml(activeVal.uncertainty)}</code>`}</div>
+                            <div><strong>Uncertainty:</strong> ${activeVal.isExact ? '<span class="badge role-defining">Exact (u = 0)</span>' : `<code>± ${formatScientificHtml(activeVal.uncertainty || '—')}</code>`}</div>
                             <div><strong>Unit:</strong> ${c.unit ? `<a href="#" onclick="switchEntity('units','${escapeHtml(c.unit.id)}');return false;"><code>${escapeHtml(c.unit.name || c.unit.id)}</code></a>` : 'dimensionless'}</div>
                         </div>
                         ${twoSourceHtml}

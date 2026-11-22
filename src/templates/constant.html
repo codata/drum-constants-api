@@ -84,7 +84,7 @@
             {% if resource.value %}
             <dt>Canonical Value ({{ resource.value.versionId }}):</dt>
             <dd property="schema:value">
-                <code id="value-{{ resource.id }}" style="font-weight: 700; color: #1e3a8a;">{{ resource.value.value }}</code>
+                <code id="value-{{ resource.id }}" style="font-weight: 700; color: #1e3a8a; overflow-wrap: anywhere; word-break: break-word;">{{ resource.value.value }}</code>
                 <button type="button" onclick="copyToClipboard('value-{{ resource.id }}', this)" class="copy-btn" title="Copy to clipboard">📋 Copy</button>
             </dd>
 
