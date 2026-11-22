@@ -267,6 +267,30 @@
             color: var(--muted);
             padding: 1.75rem 0;
             font-size: 0.88rem;
+            border-top: 1px solid var(--border);
+            margin-top: 2.5rem;
+        }
+
+        .footer-feedback-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            background: #eef2ff;
+            color: #1e3a8a;
+            border: 1px solid #c7d2fe;
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.15s;
+        }
+
+        .footer-feedback-btn:hover {
+            background: #3b5bdb;
+            color: white;
+            border-color: #3b5bdb;
+            text-decoration: none;
         }
 
         .badge {
@@ -479,6 +503,7 @@
                 <a href="{{ root_path }}/explorer" class="btn-header highlight">🔬 Open Knowledge Explorer</a>
                 <a href="{{ root_path }}/sparql" class="btn-header">⚡ SPARQL Console</a>
                 <a href="{{ root_path }}/docs" class="btn-header" target="_blank">📘 OpenAPI / Swagger</a>
+                <a href="https://github.com/codata/drum-constants-api/issues/new" class="btn-header" target="_blank" rel="noopener noreferrer" title="Submit feedback or report an issue on GitHub">💬 Feedback</a>
             </div>
         </div>
     </header>
@@ -523,10 +548,24 @@
         </main>
 
         <footer>
-            <p>&copy; 2026 CODATA DRUM Task Group. Code licensed under MIT; Knowledge Graph licensed under CC BY 4.0.
-                <a href="https://github.com/codata/drum-constants" target="_blank">Knowledge Base</a> &middot;
-                <a href="https://github.com/codata/drum-constants-api" target="_blank">API Repository</a>
-            </p>
+            <div class="footer-content" style="display: flex; flex-direction: column; align-items: center; gap: 0.65rem; text-align: center;">
+                <div class="footer-links" style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.75rem; font-weight: 500;">
+                    <a href="https://drum.codata.org" target="_blank" rel="noopener noreferrer">🌐 CODATA DRUM Website</a>
+                    <span>&middot;</span>
+                    <a href="mailto:drum@codata.org">✉️ drum@codata.org</a>
+                    <span>&middot;</span>
+                    <a href="https://github.com/codata/drum-constants-api/issues/new" target="_blank" rel="noopener noreferrer" class="footer-feedback-btn">
+                        💬 Feedback / Issues ↗
+                    </a>
+                    <span>&middot;</span>
+                    <a href="https://github.com/codata/drum-constants-api" target="_blank" rel="noopener noreferrer">API Repository</a>
+                    <span>&middot;</span>
+                    <a href="https://github.com/codata/drum-constants" target="_blank" rel="noopener noreferrer">Knowledge Base</a>
+                </div>
+                <div style="font-size: 0.82rem; color: var(--muted);">
+                    &copy; 2026 CODATA Task Group on Digital Representation of Units of Measure (DRUM). Code licensed under MIT; Knowledge Graph licensed under CC BY 4.0.
+                </div>
+            </div>
         </footer>
     </div>
 

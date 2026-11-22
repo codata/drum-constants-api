@@ -168,6 +168,19 @@ def test_historical_evolution_navigation_support(client):
     assert "Active View" in hist_resp.text
 
 
+def test_footer_and_header_community_links(client):
+    """Verify feedback button, contact email, and DRUM website links are rendered across pages."""
+    for path in ["/", "/explorer", "/constants", "/sparql"]:
+        resp = client.get(path, headers={"Accept": "text/html"})
+        assert resp.status_code == 200
+        # GitHub issue feedback button
+        assert "https://github.com/codata/drum-constants-api/issues/new" in resp.text
+        # DRUM contact email
+        assert "mailto:drum@codata.org" in resp.text
+        # DRUM website link
+        assert "https://drum.codata.org" in resp.text
+
+
 def test_api_version(client):
     """Verify package and OpenAPI version is 0.5.0."""
     from src import __version__
