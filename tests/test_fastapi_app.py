@@ -158,6 +158,8 @@ def test_historical_evolution_navigation_support(client):
     assert "btn-version-pill" in resp.text
     assert "btn-inspect-version" in resp.text
     assert "Actions" in resp.text
+    assert "Release &amp; Role" in resp.text
+    assert "● Active" not in resp.text
 
     # Verify standalone historical constant value page has navigation support
     hist_resp = client.get("/constants/PlanckConstant/2018", headers={"Accept": "text/html"})
@@ -168,8 +170,21 @@ def test_historical_evolution_navigation_support(client):
     assert "Active View" in hist_resp.text
 
 
-def test_footer_and_header_community_links(client):
-    """Verify feedback button, contact email, and DRUM website links are rendered across pages."""
+def test_footer_and_header_community_links_and_branding(client):
+    """Verify feedback button, contact email, DRUM and CODATA branding/logos are rendered across pages."""
+    # Test static assets availability
+    logo_drum_header = client.get("/static/drum_logo_750x500_white.png")
+    assert logo_drum_header.status_code == 200
+    assert "image/png" in logo_drum_header.headers["content-type"]
+
+    logo_drum_footer = client.get("/static/drum_logo_750x500.png")
+    assert logo_drum_footer.status_code == 200
+    assert "image/png" in logo_drum_footer.headers["content-type"]
+
+    logo_codata = client.get("/static/codata_logo.svg")
+    assert logo_codata.status_code == 200
+    assert "image/svg+xml" in logo_codata.headers["content-type"]
+
     for path in ["/", "/explorer", "/constants", "/sparql"]:
         resp = client.get(path, headers={"Accept": "text/html"})
         assert resp.status_code == 200
@@ -179,6 +194,28 @@ def test_footer_and_header_community_links(client):
         assert "mailto:drum@codata.org" in resp.text
         # DRUM website link
         assert "https://drum.codata.org" in resp.text
+        # CODATA website link in footer
+        assert "https://codata.org" in resp.text
+        # Header DRUM white logo
+        assert "drum_logo_750x500_white.png" in resp.text
+        # Footer DRUM standard logo
+        assert "drum_logo_750x500.png" in resp.text
+        # Footer CODATA logo
+        assert "codata_logo.svg" in resp.text
+
+
+def test_header_no_wrap_styling(client):
+    """Verify that header styles enforce single-line no-wrap layout to optimize vertical space."""
+    resp = client.get("/", headers={"Accept": "text/html"})
+    assert resp.status_code == 200
+    # Header row must have flex-wrap: nowrap
+    assert ".header-row {" in resp.text
+    assert "flex-wrap: nowrap;" in resp.text
+    # Header actions must not wrap or shrink
+    assert "flex-shrink: 0;" in resp.text
+    assert "white-space: nowrap;" in resp.text
+    # Optimized compact padding (not 1.5rem)
+    assert "padding: 0.75rem 0;" in resp.text
 
 
 def test_api_version(client):

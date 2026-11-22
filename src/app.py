@@ -15,6 +15,7 @@ import urllib.parse
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from rdflib import Graph, Literal, Namespace, RDF, URIRef
 from rdflib.plugin import register
@@ -196,6 +197,10 @@ async def add_root_path_from_forwarded_prefix(request: Request, call_next):
 # Configure Jinja2 templates
 templates_dir = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
+
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
 def _format_compact_number(val: str | None) -> str:

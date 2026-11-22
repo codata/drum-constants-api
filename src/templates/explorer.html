@@ -437,12 +437,12 @@
     .btn-version-pill {
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
-        padding: 0.25rem 0.65rem;
+        gap: 0.35rem;
+        padding: 0.18rem 0.5rem;
         background: white;
         border: 1px solid #cbd5e1;
-        border-radius: 6px;
-        font-size: 0.85rem;
+        border-radius: 5px;
+        font-size: 0.82rem;
         cursor: pointer;
         color: #1e3a8a;
         transition: all 0.15s;
@@ -463,10 +463,9 @@
         background: #2f49b0;
     }
 
-    .btn-version-pill .active-dot {
-        font-size: 0.68rem;
-        font-weight: 600;
-        color: #bbf7d0;
+    .explorer-detail table.data-table th,
+    .explorer-detail table.data-table td {
+        padding: 0.5rem 0.65rem;
     }
 
     .btn-inspect-version {
@@ -1146,35 +1145,32 @@
 
         const historyRows = allVals.map(v => {
             const isActive = activeVal && v.versionId === activeVal.versionId;
-            const vRole = v.adjustmentRole ? `<span class="badge role-${escapeHtml(v.adjustmentRole)}">${escapeHtml(v.adjustmentRole)}</span>` : "—";
+            const vRole = v.adjustmentRole ? `<span class="badge role-${escapeHtml(v.adjustmentRole)}" style="font-size:0.75rem;padding:0.15rem 0.45rem;">${escapeHtml(v.adjustmentRole)}</span>` : "—";
             const vSrc = v.valueSource ? `<span class="badge source-${escapeHtml(v.valueSource)}">${escapeHtml(v.valueSource)}</span>` : "—";
             const vType = v.recommendedNumericType ? `<span class="badge type-${escapeHtml(v.recommendedNumericType)}">${escapeHtml(v.recommendedNumericType)} (${v.significantDigits || '?'}d)</span>` : "—";
             return `
                 <tr class="history-row ${isActive ? 'active-history-row' : ''}" onclick="selectConstantVersion('${escapeHtml(v.versionId)}')">
                     <td style="white-space: nowrap;">
-                        <button type="button" class="btn-version-pill ${isActive ? 'btn-version-pill-active' : ''}"
-                            onclick="event.stopPropagation(); selectConstantVersion('${escapeHtml(v.versionId)}')"
-                            title="Click to inspect ${escapeHtml(v.versionId)} value in Explorer">
-                            <strong>${escapeHtml(v.versionId)}</strong>
-                            ${isActive ? '<span class="active-dot">● Active</span>' : ''}
-                        </button>
+                        <div style="display:flex; flex-direction:column; gap:0.25rem; align-items:flex-start;">
+                            <button type="button" class="btn-version-pill ${isActive ? 'btn-version-pill-active' : ''}"
+                                onclick="event.stopPropagation(); selectConstantVersion('${escapeHtml(v.versionId)}')"
+                                title="Click to inspect ${escapeHtml(v.versionId)} value in Explorer">
+                                <strong>${escapeHtml(v.versionId)}</strong>
+                            </button>
+                            ${vRole}
+                        </div>
                     </td>
-                    <td>${vRole}</td>
-                    <td style="font-family:monospace;font-size:0.83rem;overflow-wrap:anywhere;word-break:break-word;">
+                    <td style="font-family:monospace;font-size:0.83rem;white-space:nowrap;">
                         ${formatScientificHtml(v.value)}
-                        ${v.nistValue ? `<div style="font-size:0.75rem;color:var(--muted);">NIST: ${formatScientificHtml(v.nistValue)}${v.isNistTruncated ? '...' : ''}</div>` : ''}
+                        ${v.nistValue ? `<div style="font-size:0.75rem;color:var(--muted);white-space:nowrap;">NIST: ${formatScientificHtml(v.nistValue)}${v.isNistTruncated ? '...' : ''}</div>` : ''}
                     </td>
-                    <td style="font-family:monospace;font-size:0.83rem;overflow-wrap:anywhere;">
+                    <td style="font-family:monospace;font-size:0.83rem;white-space:nowrap;">
                         ${v.isExact ? '<span class="badge role-defining" style="font-size:0.72rem;">Exact (u = 0)</span>' : (v.uncertainty ? '± ' + formatScientificHtml(v.uncertainty) : '—')}
                     </td>
-                    <td>${vSrc}</td>
-                    <td>${vType}</td>
+                    <td style="white-space:nowrap;">${vSrc}</td>
+                    <td style="white-space:nowrap;">${vType}</td>
                     <td style="text-align: right; white-space: nowrap;">
-                        ${isActive ? `
-                            <span class="badge" style="background:#22c55e;color:white;font-size:0.75rem;padding:0.25rem 0.55rem;">
-                                ✓ Active View
-                            </span>
-                        ` : `
+                        ${isActive ? '' : `
                             <button type="button" class="btn-inspect-version"
                                 onclick="event.stopPropagation(); selectConstantVersion('${escapeHtml(v.versionId)}')"
                                 title="Inspect ${escapeHtml(v.versionId)} value in Explorer">
@@ -1182,7 +1178,7 @@
                             </button>
                         `}
                         <a href="${ROOT_PATH}/constants/${encodeURIComponent(c.id)}/${encodeURIComponent(v.versionId)}" target="_blank"
-                            class="chip" style="font-size:0.74rem;padding:0.18rem 0.45rem;margin-left:0.25rem;"
+                            class="chip" style="font-size:0.74rem;padding:0.2rem 0.5rem;margin-left:0.25rem;"
                             onclick="event.stopPropagation();" title="Open standalone page for ${escapeHtml(v.versionId)} value in new tab">
                             Page ↗
                         </a>
@@ -1290,13 +1286,12 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Release</th>
-                            <th>Role in Release</th>
-                            <th>Canonical Value</th>
-                            <th>Uncertainty</th>
-                            <th>Source</th>
-                            <th>Storage Type</th>
-                            <th style="text-align: right; min-width: 140px;">Actions</th>
+                            <th style="white-space: nowrap;">Release &amp; Role</th>
+                            <th style="min-width: 170px;">Canonical Value</th>
+                            <th style="white-space: nowrap;">Uncertainty</th>
+                            <th style="white-space: nowrap;">Source</th>
+                            <th style="white-space: nowrap;">Storage</th>
+                            <th style="text-align: right; white-space: nowrap;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>${historyRows}</tbody>
