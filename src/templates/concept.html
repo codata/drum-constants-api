@@ -4,7 +4,24 @@
 
 {% block content %}
 <article typeof="skos:Concept">
-    <h2 property="skos:prefLabel">{{ resource.name }}</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+        <div style="display:flex;align-items:center;gap:0.65rem;flex-wrap:wrap;">
+            <h2 property="skos:prefLabel" style="margin:0;">{{ resource.name }}</h2>
+            <span class="badge {{ 'badge-quantity' if resource.isQuantity else 'badge-concept' }}">
+                {{ 'Quantity' if resource.isQuantity else 'Concept' }}
+            </span>
+            {% if resource.isRatio %}
+            <span class="badge role-computed_exact">Ratio</span>
+            {% endif %}
+            {% if resource.isRelationship %}
+            <span class="badge role-computed_derived">Relationship</span>
+            {% endif %}
+        </div>
+        <a href="{{ root_path }}/explorer?entity=concepts&id={{ resource.id }}" class="chip">🔬 Inspect in Explorer →</a>
+    </div>
+    {% if resource.nameFr %}
+    <p style="color:#475569;margin-top:0.25rem;">🇫🇷 {{ resource.nameFr }}</p>
+    {% endif %}
     <p class="uri" property="@id">{{ resource.uri }}</p>
 
     <div class="metadata">
@@ -12,50 +29,68 @@
             <dt>ID:</dt>
             <dd><code>{{ resource.id }}</code></dd>
 
-            <dt>Type:</dt>
-            <dd>
-                <span class="badge {{ 'badge-quantity' if resource.isQuantity else 'badge-concept' }}">
-                    {{ 'Quantity' if resource.isQuantity else 'Concept' }}
-                </span>
-            </dd>
+            {% if resource.definition %}
+            <dt>Definition:</dt>
+            <dd property="skos:definition">{{ resource.definition }}</dd>
+            {% endif %}
 
             {% if resource.quantity %}
             <dt>Corresponding Quantity:</dt>
             <dd><a href="{{ root_path }}/quantities/{{ resource.quantity.id }}">{{ resource.quantity.name }}</a></dd>
             {% endif %}
 
-            {% if resource.quantities %}
-            <dt>Related Quantities:</dt>
-            <dd>
-                <ul class="list">
-                    {% for q in resource.quantities %}
-                    <li><a href="{{ root_path }}/quantities/{{ q.id }}">{{ q.name }}</a></li>
-                    {% endfor %}
-                </ul>
-            </dd>
-            {% endif %}
-
             {% if resource.broader %}
             <dt>Broader Concepts:</dt>
             <dd>
-                <ul class="list">
+                <div class="chip-list">
                     {% for broader in resource.broader %}
-                    <li><a href="{{ root_path }}/concepts/{{ broader.id }}" property="skos:broader">{{ broader.name
-                            }}</a></li>
+                    <a href="{{ root_path }}/concepts/{{ broader.id }}" property="skos:broader" class="chip">{{ broader.name }}</a>
                     {% endfor %}
-                </ul>
+                </div>
+            </dd>
+            {% endif %}
+
+            {% if resource.narrower %}
+            <dt>Narrower Concepts:</dt>
+            <dd>
+                <div class="chip-list">
+                    {% for narrower in resource.narrower %}
+                    <a href="{{ root_path }}/concepts/{{ narrower.id }}" class="chip">{{ narrower.name }}</a>
+                    {% endfor %}
+                </div>
             </dd>
             {% endif %}
 
             {% if resource.parts %}
             <dt>Has Parts:</dt>
             <dd>
-                <ul class="list">
+                <div class="chip-list">
                     {% for part in resource.parts %}
-                    <li><a href="{{ root_path }}/concepts/{{ part.id }}" property="dcterms:hasPart">{{ part.name }}</a>
-                    </li>
+                    <a href="{{ root_path }}/concepts/{{ part.id }}" property="dcterms:hasPart" class="chip">{{ part.name }}</a>
                     {% endfor %}
-                </ul>
+                </div>
+            </dd>
+            {% endif %}
+
+            {% if resource.quantities %}
+            <dt>Related Quantities ({{ resource.quantities|length }}):</dt>
+            <dd>
+                <div class="chip-list">
+                    {% for q in resource.quantities %}
+                    <a href="{{ root_path }}/quantities/{{ q.id }}" class="chip">{{ q.name }}</a>
+                    {% endfor %}
+                </div>
+            </dd>
+            {% endif %}
+
+            {% if resource.exactMatch %}
+            <dt>External Matches:</dt>
+            <dd>
+                <div class="chip-list">
+                    {% for match_url in resource.exactMatch %}
+                    <a href="{{ match_url }}" target="_blank" class="chip">{{ match_url }} ↗</a>
+                    {% endfor %}
+                </div>
             </dd>
             {% endif %}
         </dl>

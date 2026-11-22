@@ -4,12 +4,33 @@
 
 {% block content %}
 <article typeof="schema:Thing">
-    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-        <h2 property="schema:name" style="margin: 0;">{{ resource.name }}</h2>
-        {% if resource.isDeprecated %}
-        <span class="badge" style="background: #dc3545; color: white;">Deprecated / Discontinued</span>
-        {% endif %}
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <h2 property="schema:name" style="margin: 0;">{{ resource.name }}</h2>
+            {% if resource.symbolTex %}
+            <span class="badge" style="background: #eef2ff; color: #1e3a8a; border: 1px solid #c7d2fe; font-size: 1rem; padding: 0.2rem 0.65rem;">
+                <span class="tex-math" data-tex="{{ resource.symbolTex }}">{{ resource.symbolTex }}</span>
+            </span>
+            {% endif %}
+            {% if resource.value and resource.value.adjustmentRole %}
+            <span class="badge role-{{ resource.value.adjustmentRole }}">{{ resource.value.adjustmentRole }}</span>
+            {% endif %}
+            {% if resource.value and resource.value.valueSource %}
+            <span class="badge source-{{ resource.value.valueSource }}">source: {{ resource.value.valueSource }}</span>
+            {% endif %}
+            {% if resource.value and resource.value.recommendedNumericType %}
+            <span class="badge type-{{ resource.value.recommendedNumericType }}">IEEE 754: {{ resource.value.recommendedNumericType }}</span>
+            {% endif %}
+            {% if resource.isDeprecated %}
+            <span class="badge badge-deprecated">Deprecated / Discontinued</span>
+            {% endif %}
+        </div>
+        <a href="{{ root_path }}/explorer?entity=constants&id={{ resource.id }}" class="chip">🔬 Inspect in Explorer →</a>
     </div>
+
+    {% if resource.nameFr %}
+    <p style="color: #475569; margin-top: 0.25rem;">🇫🇷 {{ resource.nameFr }}</p>
+    {% endif %}
     <p class="uri" property="@id">{{ resource.uri }}</p>
 
     <div class="metadata">
@@ -19,15 +40,63 @@
 
             {% if resource.isDeprecated %}
             <dt>Status:</dt>
-            <dd><span class="badge" style="background: #dc3545; color: white;">Discontinued after {{ resource.value.versionId if resource.value else 'earlier release' }}</span></dd>
+            <dd><span class="badge badge-deprecated">Discontinued after {{ resource.value.versionId if resource.value else 'earlier release' }}</span></dd>
+            {% endif %}
+
+            {% if resource.formula %}
+            <dt>Algebraic Formula:</dt>
+            <dd>
+                {% if resource.symbolTex and resource.formulaLatex %}
+                <span class="tex-math" data-tex="{{ resource.symbolTex }} = {{ resource.formulaLatex }}" style="font-size: 1.05rem; margin-right: 0.75rem;">{{ resource.formulaLatex }}</span>
+                {% endif %}
+                <code>{{ resource.formula }}</code>
+            </dd>
+            {% endif %}
+
+            {% if resource.derivedFrom %}
+            <dt>Derived From:</dt>
+            <dd>
+                <div class="chip-list">
+                    {% for dep in resource.derivedFrom %}
+                    <a href="{{ root_path }}/constants/{{ dep.id }}" class="chip">
+                        {% if dep.symbolTex %}<span class="tex-math" data-tex="{{ dep.symbolTex }}">{{ dep.symbolTex }}</span>{% endif %}
+                        <span>{{ dep.name }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </dd>
+            {% endif %}
+
+            {% if resource.usedIn %}
+            <dt>Used In ({{ resource.usedIn|length }}):</dt>
+            <dd>
+                <div class="chip-list">
+                    {% for dep in resource.usedIn %}
+                    <a href="{{ root_path }}/constants/{{ dep.id }}" class="chip">
+                        {% if dep.symbolTex %}<span class="tex-math" data-tex="{{ dep.symbolTex }}">{{ dep.symbolTex }}</span>{% endif %}
+                        <span>{{ dep.name }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </dd>
             {% endif %}
 
             {% if resource.value %}
-            <dt>Value:</dt>
-            <dd property="schema:value"><code id="value-{{ resource.id }}">{{ resource.value.value }}</code> <button
-                    type="button" onclick="copyToClipboard('value-{{ resource.id }}')" class="copy-btn"
-                    title="Copy to clipboard">📋</button>
+            <dt>Canonical Value ({{ resource.value.versionId }}):</dt>
+            <dd property="schema:value">
+                <code id="value-{{ resource.id }}" style="font-weight: 700; color: #1e3a8a;">{{ resource.value.value }}</code>
+                <button type="button" onclick="copyToClipboard('value-{{ resource.id }}', this)" class="copy-btn" title="Copy to clipboard">📋 Copy</button>
             </dd>
+
+            {% if resource.value.nistValue %}
+            <dt>Original NIST Table Value:</dt>
+            <dd>
+                <code>{{ resource.value.nistValue }}{% if resource.value.isNistTruncated %}...{% endif %}</code>
+                <span style="font-size: 0.85rem; color: var(--muted); margin-left: 0.4rem;">
+                    (Upgraded from truncated NIST string via algebraic formula)
+                </span>
+            </dd>
+            {% endif %}
 
             {% if resource.value.valueDecimal %}
             <dt>Value (Decimal):</dt>
@@ -35,48 +104,59 @@
             {% endif %}
 
             {% if resource.value.valueFloat %}
-            <dt>Value (Float):</dt>
+            <dt>Value (Float64):</dt>
             <dd><code>{{ resource.value.valueFloat }}</code></dd>
             {% endif %}
 
             <dt>Uncertainty:</dt>
-            <dd><code id="uncertainty-{{ resource.id }}">{{ resource.value.uncertainty or '—' }}</code> <button
-                    type="button" onclick="copyToClipboard('uncertainty-{{ resource.id }}')" class="copy-btn"
-                    title="Copy to clipboard">📋</button>
+            <dd>
+                {% if resource.value.isExact %}
+                <span class="badge role-defining">Exact Value (u = 0)</span>
+                {% else %}
+                <code id="uncertainty-{{ resource.id }}">{{ resource.value.uncertainty or '—' }}</code>
+                <button type="button" onclick="copyToClipboard('uncertainty-{{ resource.id }}', this)" class="copy-btn" title="Copy to clipboard">📋 Copy</button>
+                {% endif %}
             </dd>
 
-            {% if resource.value.uncertaintyDecimal %}
-            <dt>Uncertainty (Decimal):</dt>
-            <dd><code>{{ resource.value.uncertaintyDecimal }}</code></dd>
+            {% if resource.value.adjustmentRole %}
+            <dt>Determination Role ({{ resource.value.versionId }}):</dt>
+            <dd>
+                <span class="badge role-{{ resource.value.adjustmentRole }}">{{ resource.value.adjustmentRole }}</span>
+                {% if resource.value.isComputed is not none %}
+                <span style="font-size: 0.85rem; color: var(--muted); margin-left: 0.4rem;">
+                    (<code>isComputed: {{ 'true' if resource.value.isComputed else 'false' }}</code>)
+                </span>
+                {% endif %}
+            </dd>
             {% endif %}
 
-            {% if resource.value.uncertaintyFloat %}
-            <dt>Uncertainty (Float):</dt>
-            <dd><code>{{ resource.value.uncertaintyFloat }}</code></dd>
+            {% if resource.value.significantDigits is not none %}
+            <dt>Precision &amp; IEEE 754 Storage:</dt>
+            <dd>
+                <code>{{ resource.value.significantDigits }}</code> significant digits &middot;
+                <code>fitsFloat32: {{ 'true' if resource.value.fitsFloat32 else 'false' }}</code> &middot;
+                <code>fitsFloat64: {{ 'true' if resource.value.fitsFloat64 else 'false' }}</code> &middot;
+                Recommended: <span class="badge type-{{ resource.value.recommendedNumericType }}">{{ resource.value.recommendedNumericType }}</span>
+            </dd>
             {% endif %}
 
             {% if resource.value.nistExponent is not none %}
-            <dt>NIST Exponent:</dt>
+            <dt>NIST Display Exponent:</dt>
             <dd><code>{{ resource.value.nistExponent }}</code> (scale factor: 10<sup>{{ resource.value.nistExponent }}</sup>)</dd>
             {% endif %}
 
-            <dt>Version:</dt>
-            <dd><code>{{ resource.value.versionId }}</code></dd>
-
-            {% if resource.value.isExact %}
-            <dt>Exact:</dt>
-            <dd><span class="badge">Exact Value</span></dd>
-            {% endif %}
-
             {% if resource.value.isTruncated %}
-            <dt>Truncated:</dt>
-            <dd><span class="badge" style="background: #ffc107; color: black;">Truncated</span></dd>
+            <dt>Truncation Status:</dt>
+            <dd><span class="badge type-decimal">Truncated at 34 decimal digits (irrational / repeating expansion)</span></dd>
             {% endif %}
             {% endif %}
 
             {% if resource.unit %}
             <dt>Unit:</dt>
-            <dd><a href="{{ root_path }}/units/{{ resource.unit.id }}">{{ resource.unit.name }}</a></dd>
+            <dd>
+                <a href="{{ root_path }}/units/{{ resource.unit.id }}">{{ resource.unit.name }}</a>
+                {% if resource.unit.ucumCode %} (UCUM: <code>{{ resource.unit.ucumCode }}</code>){% endif %}
+            </dd>
             {% endif %}
 
             {% if resource.quantity %}
@@ -85,52 +165,68 @@
             {% endif %}
 
             {% if resource.identifiers %}
-            <dt>Identifiers:</dt>
+            <dt>External Identifiers:</dt>
             <dd>
-                <ul class="list">
+                <div class="chip-list">
                     {% for identifier in resource.identifiers %}
-                    <li>
-                        <strong>{{ identifier.id }}:</strong>
-                        {% if identifier.url %}
-                        <a href="{{ identifier.url }}" target="_blank">{{ identifier.value }}</a>
-                        {% else %}
-                        {{ identifier.value }}
-                        {% endif %}
-                    </li>
+                    {% if identifier.url %}
+                    <a href="{{ identifier.url }}" target="_blank" class="chip"><strong>{{ identifier.id }}:</strong> <code>{{ identifier.value }}</code> ↗</a>
+                    {% else %}
+                    <span class="chip"><strong>{{ identifier.id }}:</strong> <code>{{ identifier.value }}</code></span>
+                    {% endif %}
                     {% endfor %}
-                </ul>
+                </div>
             </dd>
             {% endif %}
         </dl>
     </div>
 
     {% if resource.historicalValues %}
-    <h3>Historical Values</h3>
-    <div class="metadata">
-        <table style="width: 100%; border-collapse: collapse;">
+    <h3>Historical Values &amp; SI Role Evolution</h3>
+    <div style="overflow-x: auto; border: 1px solid var(--border); border-radius: 8px;">
+        <table class="data-table">
             <thead>
-                <tr style="background: #f8f9fa;">
-                    <th style="padding: 0.5rem; text-align: left;">Version</th>
-                    <th style="padding: 0.5rem; text-align: right;">Value</th>
-                    <th style="padding: 0.5rem; text-align: right;">Uncertainty</th>
-                    <th style="padding: 0.5rem; text-align: center;">Exact</th>
+                <tr>
+                    <th>Version</th>
+                    <th>Role in Release</th>
+                    <th style="text-align: right;">Canonical Value</th>
+                    <th style="text-align: right;">Uncertainty</th>
+                    <th>Source</th>
+                    <th>Storage</th>
                 </tr>
             </thead>
             <tbody>
                 {% for value in resource.historicalValues %}
-                <tr style="border-top: 1px solid #dee2e6;">
-                    <td style="padding: 0.5rem;">{{ value.versionId }}</td>
-                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;"><span
-                            id="hist-value-{{ value.versionId }}">{{ value.value }}</span> <button type="button"
-                            onclick="copyToClipboard('hist-value-{{ value.versionId }}')" class="copy-btn"
-                            title="Copy to clipboard">📋</button></td>
-                    <td style="padding: 0.5rem; text-align: right; font-family: monospace;"><span
-                            id="hist-uncertainty-{{ value.versionId }}">{{ value.uncertainty or '—' }}</span> <button
-                            type="button" onclick="copyToClipboard('hist-uncertainty-{{ value.versionId }}')"
-                            class="copy-btn" title="Copy to clipboard">📋</button></td>
-
-                    <td style="padding: 0.5rem; text-align: center;">
-                        {% if value.isExact %}✓{% else %}—{% endif %}
+                <tr>
+                    <td><a href="{{ root_path }}/constants/{{ resource.id }}/{{ value.versionId }}"><strong>{{ value.versionId }}</strong></a></td>
+                    <td>
+                        {% if value.adjustmentRole %}
+                        <span class="badge role-{{ value.adjustmentRole }}">{{ value.adjustmentRole }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="text-align: right; font-family: monospace;">
+                        <span id="hist-value-{{ value.versionId }}">{{ value.value }}</span>
+                        <button type="button" onclick="copyToClipboard('hist-value-{{ value.versionId }}', this)" class="copy-btn" title="Copy to clipboard">📋</button>
+                        {% if value.nistValue %}
+                        <div style="font-size: 0.76rem; color: var(--muted);">NIST: {{ value.nistValue }}{% if value.isNistTruncated %}...{% endif %}</div>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right; font-family: monospace;">
+                        {% if value.isExact %}
+                        <span class="badge role-defining">Exact</span>
+                        {% else %}
+                        <span id="hist-uncertainty-{{ value.versionId }}">{{ value.uncertainty or '—' }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if value.valueSource %}
+                        <span class="badge source-{{ value.valueSource }}">{{ value.valueSource }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if value.recommendedNumericType %}
+                        <span class="badge type-{{ value.recommendedNumericType }}">{{ value.recommendedNumericType }} ({{ value.significantDigits }}d)</span>
+                        {% else %}—{% endif %}
                     </td>
                 </tr>
                 {% endfor %}

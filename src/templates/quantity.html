@@ -4,23 +4,53 @@
 
 {% block content %}
 <article typeof="schema:QuantitativeValue">
-    <h2 property="schema:name">{{ resource.name }}</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+        <div style="display:flex;align-items:center;gap:0.65rem;flex-wrap:wrap;">
+            <h2 property="schema:name" style="margin:0;">{{ resource.name }}</h2>
+            <span class="badge badge-quantity">Quantity</span>
+            {% if resource.isRatio %}
+            <span class="badge role-computed_exact">Dimensionless Ratio</span>
+            {% endif %}
+            {% if resource.isRelationship %}
+            <span class="badge role-computed_derived">Energy / Unit Relationship</span>
+            {% endif %}
+        </div>
+        <a href="{{ root_path }}/explorer?entity=quantities&id={{ resource.id }}" class="chip">🔬 Inspect in Explorer →</a>
+    </div>
     <p class="uri" property="@id">{{ resource.uri }}</p>
-    
+
     <div class="metadata">
         <dl>
             <dt>ID:</dt>
             <dd><code>{{ resource.id }}</code></dd>
-            
+
+            {% if resource.definition %}
+            <dt>Definition:</dt>
+            <dd>{{ resource.definition }}</dd>
+            {% endif %}
+
             {% if resource.constants %}
-            <dt>Related Constants:</dt>
+            <dt>Associated Constants ({{ resource.constants|length }}):</dt>
             <dd>
-                <span class="badge">{{ resource.constants|length }} constant(s)</span>
-                <ul class="list">
-                {% for constant in resource.constants %}
-                    <li><a href="{{ root_path }}/constants/{{ constant.id }}">{{ constant.name }}</a></li>
-                {% endfor %}
-                </ul>
+                <div class="chip-list">
+                    {% for constant in resource.constants %}
+                    <a href="{{ root_path }}/constants/{{ constant.id }}" class="chip">
+                        {% if constant.symbolTex %}<span class="tex-math" data-tex="{{ constant.symbolTex }}">{{ constant.symbolTex }}</span>{% endif %}
+                        <span>{{ constant.name }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </dd>
+            {% endif %}
+
+            {% if resource.concepts %}
+            <dt>Taxonomic Concept Parts ({{ resource.concepts|length }}):</dt>
+            <dd>
+                <div class="chip-list">
+                    {% for concept in resource.concepts %}
+                    <a href="{{ root_path }}/concepts/{{ concept.id }}" class="chip">{{ concept.name }}</a>
+                    {% endfor %}
+                </div>
             </dd>
             {% endif %}
         </dl>

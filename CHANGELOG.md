@@ -5,7 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-11-21
+
+### Added
+- **Synchronized `drum-constants` RDF Knowledge Graph & Ontology (`v0.4.0` / `0.5.0`)**: Updated `src/data/codata_constants.ttl` and `src/data/codata.ttl`, and added `--local` synchronization support in `scripts/sync_data.py`.
+- **Two-Source Precision, Determination Roles, Formulas & IEEE 754 Metadata (`src/model.py`, `src/app.py`)**:
+  - `ConstantValue`: Added `nistValue`, `valueSource`, `adjustmentRole`, `isComputed`, `isNistTruncated`, `significantDigits`, `fitsFloat32`, `fitsFloat64`, and `recommendedNumericType`.
+  - `Constant`: Added `nameFr`, `symbolTex`, `formula`, `formulaLatex`, `derivedFrom`, `usedIn` (reverse dependency links), `ucumCode`, and external `identifiers` (`NIST`, `QUDT`, `SI`, `UCUM`).
+  - `Concept` & `Quantity`: Added `nameFr`, `definition`, `isRatio`, `isRelationship`, `exactMatch`, and `narrower` concept hierarchy traversal.
+- **Rich Query Filtering & NIST Alias Lookup**:
+  - Added `?q=`, `?role=`, `?is_exact=`, `?is_computed=`, `?value_source=`, `?recommended_numeric_type=`, `?quantity=`, and `?unit=` filters to `GET /constants`.
+  - Enabled lookup by external identifier / NIST symbol alias (e.g., `/constants/hbar`, `/constants/c`) on `GET /constants/{id}` and `GET /constants/{id}/{versionId}`.
+- **Read-Only Knowledge Explorer (`GET /explorer`)**: Added an interactive split-pane viewer with KaTeX math rendering, facet filters, formula DAG traversal chips, two-source precision comparison cards, IEEE 754 storage profiles, and 1998–2022 historical timeline tables.
+- **Developer Portal & Live Request Sandbox (`GET /`)**: Added an interactive API request builder and multi-language client code generator (`curl`, Python `httpx` + `Decimal`, JavaScript `fetch`).
+- **Integrated SPARQL Console & Observability (`GET /sparql`, `GET /health`, `GET /ontology`)**: Integrated browser SPARQL query console directly at `GET /sparql` (when `Accept: text/html` without `?query=`), and added `/health` and content-negotiated `/ontology` endpoints.
+
+### Changed
+- **High-Precision Turtle Double Serialization (`src/serializer.py`)**: Ensured `xsd:double` shorthand literals always include a scientific exponent (`e0` appended if absent) so Turtle/N3/TriG parsers round-trip `valueFloat` and `uncertaintyFloat` strictly as `xsd:double`.
+- **Fast Graph Traversal & Caching**: Replaced multi-way optional SPARQL scans on REST endpoints with direct indexed rdflib traversal and unconditional `QUERY_CACHE` caching for sub-5ms responses.
+
+### Removed
+- Removed the legacy `/playground` application (`src/static/index.html`, `src/static/sparql.html`, `src/static/assets/`) and unmaintained Postman collection links.
 
 ## [0.4.1] - 2026-11-02
 

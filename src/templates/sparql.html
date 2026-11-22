@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+
+{% block title %}SPARQL Query Console - CODATA DRUM API{% endblock %}
+
+{% block format_links %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .sparql-grid {
+        display: grid;
+        grid-template-columns: 1.45fr 1fr;
+        gap: 1.25rem;
+        margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 980px) {
+        .sparql-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .query-editor {
+        width: 100%;
+        min-height: 290px;
+        padding: 0.9rem 1rem;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+        font-size: 0.84rem;
+        line-height: 1.5;
+        background: #0f172a;
+        color: #e2e8f0;
+        resize: vertical;
+    }
+
+    .example-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .example-card {
+        text-align: left;
+        padding: 0.65rem 0.85rem;
+        background: var(--surface-alt);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .example-card:hover {
+        border-color: var(--primary);
+        background: #eef2ff;
+    }
+
+    .example-card strong {
+        display: block;
+        color: #1e3a8a;
+        font-size: 0.88rem;
+        margin-bottom: 0.15rem;
+    }
+
+    .example-card span {
+        font-size: 0.8rem;
+        color: var(--muted);
+    }
+
+    .btn-action {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: white;
+        color: var(--text);
+        font-weight: 600;
+        font-size: 0.86rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .btn-action:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .btn-action.primary {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    .btn-action.primary:hover {
+        background: var(--primary-dark);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;">
+    <div>
+        <h2 style="margin-bottom:0.2rem;">⚡ SPARQL 1.1 Query Console</h2>
+        <p style="color:var(--muted);font-size:0.92rem;">
+            Query the CODATA DRUM RDF knowledge graph directly via the W3C SPARQL 1.1 Protocol (<code>GET /sparql</code> &amp; <code>POST /sparql</code>).
+            Bound namespace prefixes (<code>codata:</code>, <code>constant:</code>, <code>quantity:</code>, <code>concept:</code>, <code>unit:</code>, <code>version:</code>, <code>skos:</code>, <code>dcterms:</code>, <code>schema:</code>) are pre-registered automatically.
+        </p>
+    </div>
+</div>
+
+<div class="sparql-grid">
+    <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.45rem;">
+            <strong style="font-size:0.88rem;color:#334155;">SPARQL Query Editor (Ctrl/Cmd + Enter to run)</strong>
+            <span style="font-size:0.78rem;color:var(--muted);">Endpoint: <code>{{ request.scope.get('root_path', '') }}/sparql</code></span>
+        </div>
+        <textarea id="sparql-input" class="query-editor"></textarea>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.65rem;align-items:center;justify-content:space-between;">
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                <button type="button" class="btn-action primary" onclick="executeSparql()">▶ Execute Query</button>
+                <button type="button" class="btn-action" onclick="copyCurlCommand(this)">Copy cURL</button>
+                <button type="button" class="btn-action" onclick="clearEditor()">Clear</button>
+            </div>
+            <span id="sparql-meta" style="font-size:0.83rem;color:var(--muted);font-weight:600;"></span>
+        </div>
+    </div>
+
+    <div>
+        <strong style="font-size:0.88rem;color:#334155;display:block;margin-bottom:0.45rem;">Curated Metrological &amp; Schema Queries</strong>
+        <div class="example-list">
+            <button type="button" class="example-card" onclick="loadExample(1)">
+                <strong>1. Two-Source Precision Upgrades (2022)</strong>
+                <span>Compare 34-digit / exact rational values against truncated NIST strings</span>
+            </button>
+            <button type="button" class="example-card" onclick="loadExample(2)">
+                <strong>2. 2019 SI Redefinition Role Shifts (2014 → 2018)</strong>
+                <span>Inspect the 67 constants whose determination role shifted in the revised SI</span>
+            </button>
+            <button type="button" class="example-card" onclick="loadExample(3)">
+                <strong>3. Formula Dependency Graph Requiring Decimal Storage</strong>
+                <span>Traverse codata:derivedFrom for constants exceeding IEEE 754 float64</span>
+            </button>
+            <button type="button" class="example-card" onclick="loadExample(4)">
+                <strong>4. Defining Constants in CODATA 2022</strong>
+                <span>List the 12 defining and conventional baseline constants (u = 0)</span>
+            </button>
+            <button type="button" class="example-card" onclick="loadExample(5)">
+                <strong>5. Dimensionless Ratios &amp; Relationships</strong>
+                <span>Query quantities flagged with codata:isRatio or codata:isRelationship</span>
+            </button>
+            <button type="button" class="example-card" onclick="loadExample(6)">
+                <strong>6. CONSTRUCT RDF Subgraph (Faraday Constant)</strong>
+                <span>Export a Turtle subgraph for FaradayConstant and its formula inputs</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="sparql-results-container" style="border-top: 1px solid var(--border); padding-top: 1.25rem;">
+    <p style="color:var(--muted);text-align:center;padding:2rem;">Execute a query to inspect results.</p>
+</div>
+
+<script>
+    const ROOT_PATH = "{{ request.scope.get('root_path', '') }}";
+
+    const EXAMPLES = {
+        1: `PREFIX codata: <https://w3id.org/codata/model/>
+PREFIX version: <https://w3id.org/codata/constants/versions/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+SELECT ?constant ?label ?formula ?nistValue ?primaryValue ?sigDigits ?isTruncated ?recType
+WHERE {
+  ?constant a codata:Constant ;
+            skos:prefLabel ?label ;
+            codata:formula ?formula ;
+            codata:hasValue ?val .
+  ?val codata:hasVersion version:2022 ;
+       codata:adjustmentRole "computed_exact" ;
+       codata:valueSource "computed" ;
+       codata:value ?primaryValue ;
+       codata:nistValue ?nistValue ;
+       codata:significantDigits ?sigDigits ;
+       codata:recommendedNumericType ?recType .
+  OPTIONAL { ?val codata:isTruncated ?isTruncated }
+  FILTER(lang(?label) = "en")
+}
+ORDER BY ?sigDigits ?label`,
+
+        2: `PREFIX codata: <https://w3id.org/codata/model/>
+PREFIX version: <https://w3id.org/codata/constants/versions/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+
+SELECT ?constant ?label ?role2014 ?role2018 ?exact2014 ?exact2018
+WHERE {
+  ?v2014 codata:hasVersion version:2014 ;
+         dcterms:isVersionOf ?constant ;
+         codata:adjustmentRole ?role2014 ;
+         codata:isExact ?exact2014 .
+  ?v2018 codata:hasVersion version:2018 ;
+         dcterms:isVersionOf ?constant ;
+         codata:adjustmentRole ?role2018 ;
+         codata:isExact ?exact2018 .
+  ?constant skos:prefLabel ?label .
+  FILTER (?role2014 != ?role2018)
+  FILTER (lang(?label) = "en")
+}
+ORDER BY ?role2014 ?role2018 ?label`,
+
+        3: `PREFIX codata: <https://w3id.org/codata/model/>
+PREFIX version: <https://w3id.org/codata/constants/versions/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+SELECT ?constant ?label ?role ?sigDigits (GROUP_CONCAT(DISTINCT ?depLabel; separator=", ") AS ?dependencies)
+WHERE {
+  ?constant a codata:Constant ;
+            skos:prefLabel ?label ;
+            codata:derivedFrom ?dep ;
+            codata:hasValue ?val .
+  ?dep skos:prefLabel ?depLabel .
+  ?val codata:hasVersion version:2022 ;
+       codata:adjustmentRole ?role ;
+       codata:recommendedNumericType "decimal" ;
+       codata:significantDigits ?sigDigits .
+  FILTER(lang(?label) = "en" && lang(?depLabel) = "en")
+}
+GROUP BY ?constant ?label ?role ?sigDigits
+ORDER BY DESC(?sigDigits) ?label`,
+
+        4: `PREFIX codata: <https://w3id.org/codata/model/>
+PREFIX version: <https://w3id.org/codata/constants/versions/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+SELECT ?constant ?label ?symbol ?value ?recType
+WHERE {
+  ?constant a codata:Constant ;
+            skos:prefLabel ?label ;
+            codata:hasValue ?val .
+  ?val codata:hasVersion version:2022 ;
+       codata:adjustmentRole "defining" ;
+       codata:value ?value ;
+       codata:recommendedNumericType ?recType .
+  OPTIONAL { ?constant codata:hasSymbol ?symbol }
+  FILTER(lang(?label) = "en")
+}
+ORDER BY ?label`,
+
+        5: `PREFIX codata: <https://w3id.org/codata/model/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+SELECT ?quantity ?label ?isRatio ?isRelationship
+WHERE {
+  ?quantity a codata:Quantity ;
+            skos:prefLabel ?label .
+  OPTIONAL { ?quantity codata:isRatio ?isRatio }
+  OPTIONAL { ?quantity codata:isRelationship ?isRelationship }
+  FILTER((BOUND(?isRatio) || BOUND(?isRelationship)) && lang(?label) = "en")
+}
+ORDER BY ?label
+LIMIT 40`,
+
+        6: `PREFIX codata: <https://w3id.org/codata/model/>
+PREFIX constant: <https://w3id.org/codata/constants/>
+
+CONSTRUCT {
+  constant:FaradayConstant ?p ?o .
+  ?val ?vp ?vo .
+}
+WHERE {
+  constant:FaradayConstant ?p ?o ;
+                           codata:hasValue ?val .
+  ?val codata:versionId "2022" ;
+       ?vp ?vo .
+}`
+    };
+
+    function escapeHtml(s) {
+        const div = document.createElement("div");
+        div.textContent = String(s ?? "");
+        return div.innerHTML;
+    }
+
+    function loadExample(id) {
+        document.getElementById("sparql-input").value = EXAMPLES[id] || "";
+        executeSparql();
+    }
+
+    function clearEditor() {
+        document.getElementById("sparql-input").value = "";
+        document.getElementById("sparql-meta").textContent = "";
+        document.getElementById("sparql-results-container").innerHTML = `<p style="color:var(--muted);text-align:center;padding:2rem;">Execute a query to inspect results.</p>`;
+    }
+
+    function copyCurlCommand(btnEl) {
+        const q = document.getElementById("sparql-input").value.trim();
+        const url = `${window.location.origin}${ROOT_PATH}/sparql`;
+        const cmd = `curl -s -X POST "${url}" \\\n  -H "Content-Type: application/sparql-query" \\\n  -H "Accept: application/sparql-results+json" \\\n  --data-binary ${JSON.stringify(q)}`;
+        copyRawText(cmd, btnEl);
+    }
+
+    async function executeSparql() {
+        const query = document.getElementById("sparql-input").value.trim();
+        if (!query) return;
+
+        const metaEl = document.getElementById("sparql-meta");
+        const container = document.getElementById("sparql-results-container");
+        metaEl.textContent = "Running query...";
+        container.innerHTML = `<p style="color:var(--muted);text-align:center;padding:2rem;">Executing SPARQL query...</p>`;
+
+        const isConstruct = /\b(CONSTRUCT|DESCRIBE)\b/i.test(query);
+        const accept = isConstruct ? "text/turtle" : "application/sparql-results+json";
+        const t0 = performance.now();
+
+        try {
+            const resp = await fetch(`${ROOT_PATH}/sparql`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/sparql-query",
+                    "Accept": accept
+                },
+                body: query
+            });
+            const elapsed = (performance.now() - t0).toFixed(1);
+
+            if (!resp.ok) {
+                const errJson = await resp.json().catch(() => ({ detail: resp.statusText }));
+                metaEl.textContent = `HTTP ${resp.status} (${elapsed} ms)`;
+                container.innerHTML = `<div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:1rem;border-radius:8px;"><strong>Query Error:</strong> ${escapeHtml(errJson.detail || resp.statusText)}</div>`;
+                return;
+            }
+
+            const ct = resp.headers.get("content-type") || "";
+            if (ct.includes("sparql-results+json")) {
+                const data = await resp.json();
+                if (typeof data.boolean === "boolean") {
+                    metaEl.textContent = `ASK Result (${elapsed} ms)`;
+                    container.innerHTML = `<div style="padding:1.25rem;background:#f8fafc;border:1px solid var(--border);border-radius:8px;"><strong>ASK Boolean Result:</strong> <span class="badge ${data.boolean ? 'role-defining' : 'badge-deprecated'}">${data.boolean}</span></div>`;
+                    return;
+                }
+                const bindings = data.results?.bindings || [];
+                const vars = data.head?.vars || [];
+                metaEl.textContent = `${bindings.length} row(s) • ${elapsed} ms`;
+                if (bindings.length === 0) {
+                    container.innerHTML = `<p style="color:var(--muted);text-align:center;padding:2rem;">Query returned 0 rows.</p>`;
+                    return;
+                }
+                let html = `<div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;"><table class="data-table"><thead><tr>`;
+                vars.forEach(v => { html += `<th>?${escapeHtml(v)}</th>`; });
+                html += `</tr></thead><tbody>`;
+                bindings.forEach(row => {
+                    html += `<tr>`;
+                    vars.forEach(v => {
+                        const cell = row[v];
+                        if (!cell) {
+                            html += `<td style="color:var(--muted);">—</td>`;
+                        } else if (cell.type === "uri") {
+                            const shortUri = cell.value.replace("https://w3id.org/codata/", "codata:");
+                            html += `<td style="font-family:monospace;font-size:0.82rem;"><a href="${escapeHtml(cell.value)}" target="_blank">${escapeHtml(shortUri)}</a></td>`;
+                        } else {
+                            html += `<td style="font-family:monospace;font-size:0.83rem;">${escapeHtml(cell.value)}</td>`;
+                        }
+                    });
+                    html += `</tr>`;
+                });
+                html += `</tbody></table></div>`;
+                container.innerHTML = html;
+            } else {
+                const text = await resp.text();
+                metaEl.textContent = `RDF Graph (${ct}) • ${elapsed} ms`;
+                container.innerHTML = `<pre style="background:#0f172a;color:#e2e8f0;padding:1rem;border-radius:8px;overflow-x:auto;font-size:0.82rem;">${escapeHtml(text)}</pre>`;
+            }
+        } catch (err) {
+            metaEl.textContent = "Error";
+            container.innerHTML = `<div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:1rem;border-radius:8px;">${escapeHtml(err)}</div>`;
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("sparql-input").addEventListener("keydown", e => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                e.preventDefault();
+                executeSparql();
+            }
+        });
+        loadExample(1);
+    });
+</script>
+{% endblock %}

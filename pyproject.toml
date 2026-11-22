@@ -1,6 +1,6 @@
 [project]
 name = "drum-api"
-version = "0.4.1"
+version = "0.5.0"
 description = "CODATA DRUM Physical Fundamental Constants FastAPI Service."
 authors = [{ name = "Pascal Heus", email = "pascal@codata.org" }]
 license = "MIT"
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-sync-data = "scripts.sync_data:sync_data"
+sync-data = "scripts.sync_data:main"
 
 [project.optional-dependencies]
 dev = ["pytest", "requests", "httpx"]
@@ -31,7 +31,7 @@ include = [
     "src/data/*.ttl",
     "src/data/*.rdf",
     "src/data/*.n3",
-    "src/static/**/*",
+    "src/templates/**/*",
 ]
 
 [tool.pytest.ini_options]

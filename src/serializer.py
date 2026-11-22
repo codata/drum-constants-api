@@ -48,9 +48,12 @@ class HighPrecisionSerializerMixin:
                 # Use Python's standard float-to-string conversion which is full precision
                 val = float(node)
                 res = str(val)
-                # Ensure it remains a double in RDF shorthand (needs 'e' or '.')
-                if "e" not in res.lower() and "." not in res:
-                    res += ".0"
+                # Ensure it remains a double in RDF shorthand (Turtle requires 'e' for xsd:double;
+                # a bare '.' without 'e' parses as xsd:decimal)
+                if "e" not in res.lower():
+                    if "." not in res:
+                        res += ".0"
+                    res += "e0"
                 return res
             elif node.datatype == XSD.decimal:
                 # Ensure decimals don't use scientific notation and have at least one dot

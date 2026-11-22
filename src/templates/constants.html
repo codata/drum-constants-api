@@ -2,70 +2,112 @@
 
 {% block title %}Constants - CODATA{% endblock %}
 
-{% block format_links %}{% endblock %}
-
 {% block content %}
 <article>
-    <h2>Fundamental Physical Constants</h2>
-    <p>Browse all fundamental physical constants in the CODATA repository.</p>
-    
-    <div class="metadata">
-        <p><strong>Total Constants:</strong> <span class="badge">{{ resources|length }}</span></p>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:1rem;margin-bottom:0.75rem;">
+        <div>
+            <h2 style="margin-bottom:0.2rem;">Fundamental Physical Constants</h2>
+            <p style="color:var(--muted);font-size:0.92rem;">Browse and filter CODATA fundamental physical constants across adjustments, determination roles, and precision classes.</p>
+        </div>
+        <span class="badge" style="font-size:0.9rem;padding:0.3rem 0.75rem;">Showing {{ resources|length }} Constants</span>
     </div>
-    
-    <table style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
-        <thead>
-            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
-                <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Name</th>
-                <th style="padding: 0.75rem; text-align: right; font-weight: 600;">Value</th>
-                <th style="padding: 0.75rem; text-align: right; font-weight: 600;">Uncertainty</th>
-                <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Unit</th>
-                <th style="padding: 0.75rem; text-align: right; font-weight: 600;">Year</th>
-                <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Quantity</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for constant in resources %}
-            <tr style="border-bottom: 1px solid #e9ecef;">
-                <td style="padding: 0.75rem;">
-                    <a href="{{ root_path }}/constants/{{ constant.id }}">{{ constant.name }}</a>
-                    {% if constant.isDeprecated %}
-                    <span class="badge" style="background: #dc3545; color: white; font-size: 0.75rem; margin-left: 0.35rem;">Deprecated</span>
-                    {% endif %}
-                </td>
-                <td style="padding: 0.75rem; text-align: right; font-family: monospace; white-space: nowrap;">
-                    {% if constant.value %}
-                    <span style="display: inline-flex; align-items: center; gap: 0.5rem;">
-                        {{ constant.value.value }}
-                        <button onclick="navigator.clipboard.writeText('{{ constant.value.value }}')" style="background: none; border: none; cursor: pointer; padding: 0; font-size: 0.875rem;" title="Copy value">📋</button>
-                    </span>
-                    {% else %}-{% endif %}
-                </td>
-                <td style="padding: 0.75rem; text-align: right; font-family: monospace; white-space: nowrap;">
-                    {% if constant.value %}
-                    <span style="display: inline-flex; align-items: center; gap: 0.5rem;">
-                        {{ constant.value.uncertainty }}
-                        <button onclick="navigator.clipboard.writeText('{{ constant.value.uncertainty }}')" style="background: none; border: none; cursor: pointer; padding: 0; font-size: 0.875rem;" title="Copy uncertainty">📋</button>
-                    </span>
-                    {% else %}-{% endif %}
-                </td>
-                <td style="padding: 0.75rem;">
-                    {% if constant.unit %}
-                    <a href="{{ root_path }}/units/{{ constant.unit.id }}">{{ constant.unit.name }}</a>
-                    {% else %}-{% endif %}
-                </td>
-                <td style="padding: 0.75rem; text-align: right; font-family: monospace;">
-                    {% if constant.value %}{{ constant.value.versionId }}{% else %}-{% endif %}
-                </td>
-                <td style="padding: 0.75rem;">
-                    {% if constant.quantity %}
-                    <a href="{{ root_path }}/quantities/{{ constant.quantity.id }}">{{ constant.quantity.name }}</a>
-                    {% else %}-{% endif %}
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+
+    <form method="get" action="{{ root_path }}/constants" style="background:var(--surface-alt);border:1px solid var(--border);border-radius:8px;padding:0.85rem 1rem;margin-bottom:1.25rem;display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;">
+        <input type="text" name="q" value="{{ filters.q if filters else '' }}" placeholder="Search name, symbol, ID, formula..." style="padding:0.42rem 0.7rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.86rem;min-width:220px;flex:1;">
+        <select name="version" style="padding:0.42rem 0.6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.85rem;background:white;">
+            {% for yr in ['2022', '2018', '2014', '2010', '2006', '2002', '1998'] %}
+            <option value="{{ yr }}" {% if filters and filters.version == yr %}selected{% endif %}>CODATA {{ yr }}</option>
+            {% endfor %}
+        </select>
+        <select name="role" style="padding:0.42rem 0.6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.85rem;background:white;">
+            <option value="">All Roles</option>
+            {% for r in ['defining', 'computed_exact', 'adjusted', 'computed_derived'] %}
+            <option value="{{ r }}" {% if filters and filters.role == r %}selected{% endif %}>{{ r }}</option>
+            {% endfor %}
+        </select>
+        <select name="value_source" style="padding:0.42rem 0.6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.85rem;background:white;">
+            <option value="">All Sources</option>
+            <option value="computed" {% if filters and filters.value_source == 'computed' %}selected{% endif %}>computed (upgraded)</option>
+            <option value="nist" {% if filters and filters.value_source == 'nist' %}selected{% endif %}>nist (standard)</option>
+        </select>
+        <select name="recommended_numeric_type" style="padding:0.42rem 0.6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.85rem;background:white;">
+            <option value="">All Numeric Types</option>
+            <option value="decimal" {% if filters and filters.recommended_numeric_type == 'decimal' %}selected{% endif %}>decimal (&gt; float64)</option>
+            <option value="float64" {% if filters and filters.recommended_numeric_type == 'float64' %}selected{% endif %}>float64</option>
+            <option value="float32" {% if filters and filters.recommended_numeric_type == 'float32' %}selected{% endif %}>float32</option>
+        </select>
+        <button type="submit" style="background:var(--primary);color:white;border:none;border-radius:6px;padding:0.45rem 0.95rem;font-weight:600;font-size:0.85rem;cursor:pointer;">Filter</button>
+        <a href="{{ root_path }}/constants" style="font-size:0.84rem;color:var(--muted);padding:0.3rem 0.5rem;">Reset</a>
+    </form>
+
+    <div style="overflow-x: auto; border: 1px solid var(--border); border-radius: 8px;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Symbol</th>
+                    <th>Role</th>
+                    <th style="text-align: right;">Value</th>
+                    <th style="text-align: right;">Uncertainty</th>
+                    <th>Unit</th>
+                    <th>Storage</th>
+                    <th>Year</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for constant in resources %}
+                <tr>
+                    <td>
+                        <a href="{{ root_path }}/constants/{{ constant.id }}" style="font-weight:600;">{{ constant.name }}</a>
+                        {% if constant.isDeprecated %}
+                        <span class="badge badge-deprecated" style="margin-left: 0.35rem;">Deprecated</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if constant.symbolTex %}
+                        <span class="tex-math" data-tex="{{ constant.symbolTex }}">{{ constant.symbolTex }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if constant.value and constant.value.adjustmentRole %}
+                        <span class="badge role-{{ constant.value.adjustmentRole }}">{{ constant.value.adjustmentRole }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="text-align: right; font-family: monospace; white-space: nowrap;">
+                        {% if constant.value %}
+                        <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                            {{ constant.value.value[:24] }}{% if constant.value.value|length > 24 %}…{% endif %}
+                            <button type="button" onclick="copyRawText('{{ constant.value.value }}', this)" class="copy-btn" title="Copy full value">📋</button>
+                        </span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="text-align: right; font-family: monospace; white-space: nowrap;">
+                        {% if constant.value %}
+                            {% if constant.value.isExact %}
+                            <span class="badge role-defining">Exact</span>
+                            {% else %}
+                            {{ constant.value.uncertainty or '—' }}
+                            {% endif %}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if constant.unit %}
+                        <a href="{{ root_path }}/units/{{ constant.unit.id }}"><code>{{ constant.unit.name }}</code></a>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if constant.value and constant.value.recommendedNumericType %}
+                        <span class="badge type-{{ constant.value.recommendedNumericType }}">{{ constant.value.recommendedNumericType }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="font-family: monospace;">
+                        {% if constant.value %}{{ constant.value.versionId }}{% else %}—{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </article>
 {% endblock %}
 

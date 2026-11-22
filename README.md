@@ -18,39 +18,49 @@ The API is available for testing at:
 **[https://api.codata.org/drum](https://api.codata.org/drum/constants)**
 
 ### Interactive Documentation & Tools
+- **Knowledge Explorer (Read-Only Viewer)**: `/explorer`
+- **Developer Portal & Live Sandbox**: `/`
+- **SPARQL Query Console**: `/sparql`
 - **Swagger UI**: `/docs`
 - **ReDoc**: `/redoc`
-- **Postman**: [CODATA DRUM Public Collection](https://www.postman.com/codata-org/workspace/codata-drum/collection/41633755-4a0c7834-ce9a-4d88-b4f0-c88f242094f5)
-- **SPARQL Playground**: `/playground/sparql`
+- **OWL/RDFS Ontology**: `/ontology`
+- **Health & Dataset Metrics**: `/health`
 
 ## Features
-- **RESTful API** - High-performance engine built with FastAPI (Python 3.11+)
-- **High-Precision RDF** - Custom serializers preserving full decimal precision for physical constants
+- **RESTful API** - High-performance engine built with FastAPI (Python 3.12+)
+- **Two-Source Precision & IEEE 754 Guidance** - 34-digit IEEE 754 `decimal128` and complete terminating rational expansions (`value`) alongside verbatim NIST strings (`nistValue`), plus `significantDigits`, `fitsFloat32`, `fitsFloat64`, and `recommendedNumericType`
+- **Per-Release SI Determination Roles** - `adjustmentRole` (`defining`, `computed_exact`, `adjusted`, `computed_derived`) and `isComputed` on each versioned value across 1998–2022
+- **Algebraic Formula Dependency DAG** - Symbolic expressions (`formula`), LaTeX equations (`formulaLatex`), and bidirectional dependency links (`derivedFrom` and `usedIn`)
+- **High-Precision RDF** - Custom serializers preserving full decimal and double precision for physical constants
 - **Content Negotiation** - HTML, JSON, and RDF formats (Turtle, N-Triples, N3, JSON-LD, RDF/XML, TriG)
-- **SPARQL Engine** - Direct access to the RDF knowledge graph
-- **Linked Data** - 100% URL-resolvable resources with rich semantic relationships
-- **Interactive Tools** - Integrated Swagger, ReDoc, and Postman Collection
-- **Modern Stack** - Pydantic V2, `uv` project management, and async processing
+- **SPARQL Engine** - Direct access to the RDF knowledge graph via W3C SPARQL 1.1 Protocol (`GET /sparql` and `POST /sparql`)
+- **Interactive Explorer & Developer Sandbox** - Built-in read-only viewer (`/explorer`) for scientists and interactive code generator (`/`) for developers
 
 ## API Endpoints
 
+### Web & Observability
+- `GET /` - Developer Portal, live request sandbox, and code snippet generator (or JSON welcome payload)
+- `GET /explorer` - Read-only interactive split-pane viewer for scientists and non-technical users
+- `GET /health` - Service health and knowledge graph statistics
+- `GET /ontology` - Formal CODATA OWL/RDFS ontology (`codata.ttl`) with content negotiation
+
 ### Resource Lists
-- `GET /` - API welcome and overview
-- `GET /concepts` - Browse all concepts (including quantities)
+- `GET /constants` - Browse and filter fundamental constants (`?q=`, `?version=`, `?role=`, `?is_exact=`, `?is_computed=`, `?value_source=`, `?recommended_numeric_type=`, `?quantity=`, `?unit=`, `?include_deprecated=`)
 - `GET /quantities` - Browse all physical quantities
-- `GET /constants` - Browse all fundamental constants
+- `GET /concepts` - Browse all SKOS taxonomic concepts (including quantities)
 - `GET /units` - Browse all units of measurement
-- `GET /constants/versions` - Browse all CODATA version releases
+- `GET /constants/versions` - Browse all CODATA version releases (1998–2022)
 
 ### Resource Details
-- `GET /concepts/{id}` - Get concept details with relationships
-- `GET /quantities/{id}` - Get quantity details with associated constants
-- `GET /constants/{id}` - Get constant details with values across versions
-- `GET /units/{id}` - Get unit details
+- `GET /constants/{id}` - Get constant details (by canonical ID or NIST symbol alias such as `h`, `c`, `hbar`), formula DAG links, and values across versions
+- `GET /constants/{id}/{versionId}` - Get a specific versioned value and its determination role in that release
+- `GET /quantities/{id}` - Get quantity details with associated constants and concepts
+- `GET /concepts/{id}` - Get concept details with broader/narrower relationships and definitions
+- `GET /units/{id}` - Get unit details with SI Digital Framework and UCUM identifiers
 - `GET /constants/versions/{id}` - Get version release information
 
 ### Advanced
-- `GET /sparql` - Direct SPARQL query endpoint (query parameter: `query`)
+- `GET /sparql` & `POST /sparql` - Direct W3C SPARQL 1.1 query endpoint (or interactive browser console when opened as `text/html` without `?query=`)
 
 All endpoints support content negotiation via `Accept` header or `?format=` query parameter.
 
