@@ -204,6 +204,45 @@ def test_footer_and_header_community_links_and_branding(client):
         assert "codata_logo.svg" in resp.text
 
 
+def test_static_assets_under_subpath_proxy():
+    """Verify static assets resolve with 200 OK when accessed via subpath reverse proxy."""
+    import asyncio
+    from httpx import AsyncClient, ASGITransport
+
+    async def _test():
+        # Case 1: Proxy stripped /drum/constants, root_path set in ASGI scope
+        transport_scope = ASGITransport(app=app, root_path="/drum/constants")
+        async with AsyncClient(transport=transport_scope, base_url="http://testserver") as client:
+            r = await client.get("/static/drum_logo_750x500_white.png")
+            assert r.status_code == 200
+            assert r.headers["content-type"] == "image/png"
+
+            r_svg = await client.get("/static/codata_logo.svg")
+            assert r_svg.status_code == 200
+            assert "image/svg+xml" in r_svg.headers["content-type"]
+
+        # Case 2: Proxy stripped /drum/constants, X-Forwarded-Prefix header passed
+        transport_plain = ASGITransport(app=app)
+        async with AsyncClient(transport=transport_plain, base_url="http://testserver") as client:
+            r_hdr = await client.get(
+                "/static/drum_logo_750x500_white.png",
+                headers={"X-Forwarded-Prefix": "/drum/constants"},
+            )
+            assert r_hdr.status_code == 200
+            assert r_hdr.headers["content-type"] == "image/png"
+
+        # Case 3: Proxy passed full subpath /drum/constants/static/...
+        async with AsyncClient(transport=transport_plain, base_url="http://testserver") as client:
+            r_full = await client.get(
+                "/drum/constants/static/drum_logo_750x500_white.png",
+                headers={"X-Forwarded-Prefix": "/drum/constants"},
+            )
+            assert r_full.status_code == 200
+            assert r_full.headers["content-type"] == "image/png"
+
+    asyncio.run(_test())
+
+
 def test_header_no_wrap_styling(client):
     """Verify that header styles enforce single-line no-wrap layout to optimize vertical space."""
     resp = client.get("/", headers={"Accept": "text/html"})

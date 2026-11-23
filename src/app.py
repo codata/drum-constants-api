@@ -198,6 +198,27 @@ async def add_root_path_from_forwarded_prefix(request: Request, call_next):
 templates_dir = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
 
+class SubpathStaticFiles(StaticFiles):
+    """StaticFiles subclass that properly handles reverse proxies with stripped subpaths.
+
+    When running behind a reverse proxy that sets X-Forwarded-Prefix or root_path
+    and strips the prefix before forwarding to the backend, Starlette's StaticFiles
+    mount can fail to strip the /static prefix from the relative path. This subclass
+    normalizes the file path so static assets resolve seamlessly regardless of
+    whether the proxy stripped the path or preserved the prefix.
+    """
+
+    def get_path(self, scope: Any) -> str:
+        from starlette.staticfiles import get_route_path
+
+        route_path = get_route_path(scope)
+        for prefix in ["/static/", "static/", "/"]:
+            if route_path.startswith(prefix):
+                route_path = route_path[len(prefix) :]
+                break
+        return os.path.normpath(os.path.join(*route_path.split("/")))
+
+
 # Configure static file serving
 static_dir = Path(__file__).parent / "static"
 if not static_dir.exists():
@@ -211,7 +232,10 @@ if not static_dir.exists():
             break
 
 if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    app.mount("/static", SubpathStaticFiles(directory=str(static_dir)), name="static")
+    if ROOT_PATH and ROOT_PATH != "/":
+        clean_root = ROOT_PATH.rstrip("/")
+        app.mount(f"{clean_root}/static", SubpathStaticFiles(directory=str(static_dir)), name="static_subpath")
     logger.info("Mounted static files from %s at /static", static_dir)
 else:
     logger.warning("Static directory not found; static assets will not be served")
