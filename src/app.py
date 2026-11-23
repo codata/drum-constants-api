@@ -198,9 +198,23 @@ async def add_root_path_from_forwarded_prefix(request: Request, call_next):
 templates_dir = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
 
+# Configure static file serving
 static_dir = Path(__file__).parent / "static"
+if not static_dir.exists():
+    for candidate in [
+        Path.cwd() / "src" / "static",
+        Path.cwd() / "static",
+        Path(__file__).resolve().parent.parent / "src" / "static",
+    ]:
+        if candidate.exists():
+            static_dir = candidate
+            break
+
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    logger.info("Mounted static files from %s at /static", static_dir)
+else:
+    logger.warning("Static directory not found; static assets will not be served")
 
 
 def _format_compact_number(val: str | None) -> str:

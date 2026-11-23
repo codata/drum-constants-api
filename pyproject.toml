@@ -32,6 +32,7 @@ include = [
     "src/data/*.rdf",
     "src/data/*.n3",
     "src/templates/**/*",
+    "src/static/**/*",
 ]
 
 [tool.pytest.ini_options]

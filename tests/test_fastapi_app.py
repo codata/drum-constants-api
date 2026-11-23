@@ -218,6 +218,18 @@ def test_header_no_wrap_styling(client):
     assert "padding: 0.75rem 0;" in resp.text
 
 
+def test_static_files_included_in_pyproject_build():
+    """Verify pyproject.toml includes src/static/**/* in hatch build targets."""
+    import tomllib
+    from pathlib import Path
+
+    pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+    with open(pyproject_path, "rb") as f:
+        data = tomllib.load(f)
+    includes = data.get("tool", {}).get("hatch", {}).get("build", {}).get("include", [])
+    assert "src/static/**/*" in includes, "src/static/**/* must be included in hatch build targets"
+
+
 def test_api_version(client):
     """Verify package and OpenAPI version is 0.5.0."""
     from src import __version__
