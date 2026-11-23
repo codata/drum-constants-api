@@ -97,6 +97,20 @@ def test_explorer_search_scope_options_and_filtering(client):
     assert "clearSearch" in resp.text
     assert "updateSearchPlaceholder" in resp.text
     assert "getFieldValuesForScope" in resp.text
+    assert "ENTITY_SEARCH_SCOPES" in resp.text
+    assert "adjustSearchScopeOptions" in resp.text
+    assert "updateFilterPanels" in resp.text
+
+    # Entity-specific filter blocks and selectors
+    assert 'id="constant-filters"' in resp.text
+    assert 'id="quantity-filters"' in resp.text
+    assert 'id="concept-filters"' in resp.text
+    assert 'id="unit-filters"' in resp.text
+    assert 'id="version-filters"' in resp.text
+    assert 'id="filter-quantity-type"' in resp.text
+    assert 'id="filter-concept-type"' in resp.text
+    assert 'id="filter-unit-type"' in resp.text
+    assert 'id="filter-version-era"' in resp.text
 
     # Verify scope filtering logic against actual API constant dataset
     const_resp = client.get("/constants", headers={"Accept": "application/json"})

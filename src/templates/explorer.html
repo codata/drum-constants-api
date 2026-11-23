@@ -585,6 +585,66 @@
                     <span id="visible-count">Loading...</span>
                 </div>
             </div>
+
+            <div id="quantity-filters" class="entity-filter-block" style="display: none;">
+                <div class="filter-row">
+                    <select id="filter-quantity-type" class="filter-select" onchange="applyFilters()">
+                        <option value="">All Quantity Kinds</option>
+                        <option value="ratio">Dimensionless Ratios (isRatio)</option>
+                        <option value="relationship">Relationships (isRelationship)</option>
+                        <option value="physical">Physical Quantities (Dimensional)</option>
+                    </select>
+                </div>
+                <div class="filter-meta" style="margin-top: 0.45rem;">
+                    <span></span>
+                    <span id="quantity-visible-count"></span>
+                </div>
+            </div>
+
+            <div id="concept-filters" class="entity-filter-block" style="display: none;">
+                <div class="filter-row">
+                    <select id="filter-concept-type" class="filter-select" onchange="applyFilters()">
+                        <option value="">All Concept Kinds</option>
+                        <option value="quantity">Physical Quantity Concepts (isQuantity)</option>
+                        <option value="taxonomic">Taxonomic Concepts</option>
+                        <option value="ratio">Ratio Concepts (isRatio)</option>
+                        <option value="relationship">Relationship Concepts (isRelationship)</option>
+                    </select>
+                </div>
+                <div class="filter-meta" style="margin-top: 0.45rem;">
+                    <span></span>
+                    <span id="concept-visible-count"></span>
+                </div>
+            </div>
+
+            <div id="unit-filters" class="entity-filter-block" style="display: none;">
+                <div class="filter-row">
+                    <select id="filter-unit-type" class="filter-select" onchange="applyFilters()">
+                        <option value="">All Units</option>
+                        <option value="has_ucum">Has UCUM Code</option>
+                        <option value="has_si">Has SI Expression</option>
+                        <option value="has_constants">Associated with Constants</option>
+                    </select>
+                </div>
+                <div class="filter-meta" style="margin-top: 0.45rem;">
+                    <span></span>
+                    <span id="unit-visible-count"></span>
+                </div>
+            </div>
+
+            <div id="version-filters" class="entity-filter-block" style="display: none;">
+                <div class="filter-row">
+                    <select id="filter-version-era" class="filter-select" onchange="applyFilters()">
+                        <option value="">All Adjustment Releases</option>
+                        <option value="revised_si">Revised SI Era (2018 &amp; 2022)</option>
+                        <option value="legacy_si">Legacy SI Era (1998–2014)</option>
+                    </select>
+                </div>
+                <div class="filter-meta" style="margin-top: 0.45rem;">
+                    <span></span>
+                    <span id="version-visible-count"></span>
+                </div>
+            </div>
             <div id="generic-filter-meta" class="filter-meta" style="display: none;">
                 <span id="generic-visible-count"></span>
             </div>
@@ -614,6 +674,40 @@
         computed_exact: "Computed Exact (Derived from Defining Constants, u = 0)",
         adjusted: "Adjusted Variable (Experimental Least-Squares Input, u > 0)",
         computed_derived: "Computed Derived (Algebraic Function with Propagated Uncertainty, u > 0)"
+    };
+
+    const ENTITY_SEARCH_SCOPES = {
+        constants: [
+            { value: "all", label: "All Fields" },
+            { value: "name", label: "Name Only" },
+            { value: "symbol", label: "Symbol / LaTeX" },
+            { value: "formula", label: "Formula Only" },
+            { value: "id", label: "ID / URI" }
+        ],
+        quantities: [
+            { value: "all", label: "All Fields" },
+            { value: "name", label: "Name Only" },
+            { value: "definition", label: "Definition Only" },
+            { value: "id", label: "ID / URI" }
+        ],
+        concepts: [
+            { value: "all", label: "All Fields" },
+            { value: "name", label: "Name (EN/FR)" },
+            { value: "definition", label: "Definition Only" },
+            { value: "id", label: "ID / URI" }
+        ],
+        units: [
+            { value: "all", label: "All Fields" },
+            { value: "name", label: "Name Only" },
+            { value: "code", label: "UCUM / SI Code" },
+            { value: "id", label: "ID / URI" }
+        ],
+        versions: [
+            { value: "all", label: "All Fields" },
+            { value: "name", label: "Release Year" },
+            { value: "date", label: "Published Date" },
+            { value: "id", label: "ID / URI" }
+        ]
     };
 
     let state = {
@@ -716,6 +810,37 @@
         }
     }
 
+    function adjustSearchScopeOptions(entity, desiredScope = null) {
+        const scopeEl = document.getElementById("search-scope");
+        if (!scopeEl) return;
+        const currentScope = desiredScope || scopeEl.value || "all";
+        const scopes = ENTITY_SEARCH_SCOPES[entity] || ENTITY_SEARCH_SCOPES.constants;
+
+        scopeEl.innerHTML = scopes.map(s => `<option value="${s.value}">${s.label}</option>`).join("");
+        const hasCurrent = scopes.some(s => s.value === currentScope);
+        scopeEl.value = hasCurrent ? currentScope : "all";
+        updateSearchPlaceholder();
+    }
+
+    function updateFilterPanels(entity) {
+        const panels = {
+            constants: document.getElementById("constant-filters"),
+            quantities: document.getElementById("quantity-filters"),
+            concepts: document.getElementById("concept-filters"),
+            units: document.getElementById("unit-filters"),
+            versions: document.getElementById("version-filters")
+        };
+        for (const [key, el] of Object.entries(panels)) {
+            if (el) {
+                el.style.display = key === entity ? "block" : "none";
+            }
+        }
+        const genMeta = document.getElementById("generic-filter-meta");
+        if (genMeta) {
+            genMeta.style.display = "none";
+        }
+    }
+
     window.addEventListener("popstate", (event) => {
         let targetEntity = "constants";
         let targetId = null;
@@ -742,9 +867,8 @@
         if (document.getElementById("filter-version")) {
             document.getElementById("filter-version").value = targetVersion;
         }
-        if (document.getElementById("search-scope")) {
-            document.getElementById("search-scope").value = targetScope;
-        }
+        adjustSearchScopeOptions(targetEntity, targetScope);
+        updateFilterPanels(targetEntity);
         if (document.getElementById("explorer-search")) {
             document.getElementById("explorer-search").value = targetQ;
             const clearBtn = document.getElementById("search-clear-btn");
@@ -753,7 +877,7 @@
         updateSearchPlaceholder();
 
         if (targetEntity !== state.entity) {
-            switchEntity(targetEntity, targetId, false);
+            switchEntity(targetEntity, targetId, false, targetScope);
         } else if (targetId && targetId !== state.selectedId) {
             selectItem(targetId, false);
         } else if (state.currentConstant) {
@@ -789,61 +913,120 @@
         if (!searchInput) return;
         const scopeEl = document.getElementById("search-scope");
         const scope = scopeEl ? scopeEl.value : "all";
-        const entityLabels = {
-            constants: "constants",
-            quantities: "quantities",
-            concepts: "concepts",
-            units: "units",
-            versions: "releases"
-        };
-        const entLabel = entityLabels[state.entity] || "items";
+        const entity = state.entity || "constants";
 
         if (scope === "name") {
-            searchInput.placeholder = `Search ${entLabel} by name...`;
+            if (entity === "concepts") {
+                searchInput.placeholder = "Search concepts by name (EN/FR)...";
+            } else if (entity === "versions") {
+                searchInput.placeholder = "Search releases by year (e.g. 2022)...";
+            } else {
+                searchInput.placeholder = `Search ${entity} by name...`;
+            }
         } else if (scope === "symbol") {
-            searchInput.placeholder = `Search by symbol or LaTeX...`;
+            searchInput.placeholder = "Search by symbol or LaTeX...";
         } else if (scope === "formula") {
-            searchInput.placeholder = `Search by formula expression...`;
+            searchInput.placeholder = "Search by formula expression...";
+        } else if (scope === "definition") {
+            searchInput.placeholder = `Search ${entity} by definition...`;
+        } else if (scope === "code") {
+            searchInput.placeholder = "Search by UCUM or SI expression...";
+        } else if (scope === "date") {
+            searchInput.placeholder = "Search by published date...";
         } else if (scope === "id") {
-            searchInput.placeholder = `Search by ID / URI / code...`;
+            searchInput.placeholder = "Search by ID or URI...";
         } else {
+            const entityLabels = {
+                constants: "constants",
+                quantities: "quantities",
+                concepts: "concepts",
+                units: "units",
+                versions: "releases"
+            };
+            const entLabel = entityLabels[entity] || "items";
             searchInput.placeholder = `Search ${entLabel} (all fields)...`;
         }
     }
 
-    function getFieldValuesForScope(item, scope) {
+    function getFieldValuesForScope(item, scope, entity = state.entity) {
         if (!item) return [];
-        if (scope === "name") {
-            return [item.name, item.nameFr];
-        } else if (scope === "symbol") {
-            return [item.symbolTex, item.symbolHtml];
-        } else if (scope === "formula") {
-            return [item.formula, item.formulaLatex, item.siExpression];
-        } else if (scope === "id") {
-            return [item.id, item.uri, item.ucumCode];
+        if (entity === "constants") {
+            if (scope === "name") {
+                return [item.name, item.nameFr];
+            } else if (scope === "symbol") {
+                return [item.symbolTex, item.symbolHtml];
+            } else if (scope === "formula") {
+                return [item.formula, item.formulaLatex, item.siExpression];
+            } else if (scope === "id") {
+                return [item.id, item.uri, item.ucumCode];
+            } else {
+                return [
+                    item.id,
+                    item.name,
+                    item.nameFr,
+                    item.definition,
+                    item.symbolTex,
+                    item.symbolHtml,
+                    item.formula,
+                    item.formulaLatex,
+                    item.ucumCode,
+                    item.siExpression,
+                    item.uri
+                ];
+            }
+        } else if (entity === "quantities") {
+            if (scope === "name") {
+                return [item.name];
+            } else if (scope === "definition") {
+                return [item.definition];
+            } else if (scope === "id") {
+                return [item.id, item.uri];
+            } else {
+                return [item.id, item.name, item.definition, item.uri];
+            }
+        } else if (entity === "concepts") {
+            if (scope === "name") {
+                return [item.name, item.nameFr];
+            } else if (scope === "definition") {
+                return [item.definition];
+            } else if (scope === "id") {
+                return [item.id, item.uri];
+            } else {
+                return [item.id, item.name, item.nameFr, item.definition, item.uri];
+            }
+        } else if (entity === "units") {
+            if (scope === "name") {
+                return [item.name];
+            } else if (scope === "code") {
+                return [item.ucumCode, item.siExpression];
+            } else if (scope === "id") {
+                return [item.id, item.uri, item.ucumCode];
+            } else {
+                const identVals = (item.identifiers || []).map(i => i.value || i.id);
+                return [item.id, item.name, item.ucumCode, item.siExpression, item.uri, ...identVals];
+            }
+        } else if (entity === "versions") {
+            if (scope === "name") {
+                return [item.id];
+            } else if (scope === "date") {
+                return [item.published];
+            } else if (scope === "id") {
+                return [item.id, item.uri];
+            } else {
+                return [item.id, item.published, item.uri];
+            }
         } else {
-            return [
-                item.id,
-                item.name,
-                item.nameFr,
-                item.definition,
-                item.symbolTex,
-                item.symbolHtml,
-                item.formula,
-                item.formulaLatex,
-                item.ucumCode,
-                item.siExpression
-            ];
+            return [item.id, item.name, item.definition, item.uri];
         }
     }
 
-    async function switchEntity(entity, targetId = null, pushHistory = true) {
+    async function switchEntity(entity, targetId = null, pushHistory = true, desiredScope = null) {
         state.entity = entity;
         document.querySelectorAll(".entity-tab").forEach(btn => {
             btn.classList.toggle("active", btn.dataset.entity === entity);
         });
-        document.getElementById("constant-filters").style.display = entity === "constants" ? "block" : "none";
-        document.getElementById("generic-filter-meta").style.display = entity === "constants" ? "none" : "flex";
+        updateFilterPanels(entity);
+        adjustSearchScopeOptions(entity, desiredScope);
 
         if (pushHistory) {
             document.getElementById("explorer-search").value = "";
@@ -887,15 +1070,15 @@
         const q = searchInput ? searchInput.value.trim().toLowerCase() : "";
         const scopeEl = document.getElementById("search-scope");
         const scope = scopeEl ? scopeEl.value : "all";
-        const role = document.getElementById("filter-role").value;
-        const prec = document.getElementById("filter-precision").value;
-        const storage = document.getElementById("filter-storage").value;
+        const role = document.getElementById("filter-role") ? document.getElementById("filter-role").value : "";
+        const prec = document.getElementById("filter-precision") ? document.getElementById("filter-precision").value : "";
+        const storage = document.getElementById("filter-storage") ? document.getElementById("filter-storage").value : "";
 
         const tokens = q ? q.split(/\s+/).filter(Boolean) : [];
 
         state.filtered = state.items.filter(item => {
             if (tokens.length > 0) {
-                const hay = getFieldValuesForScope(item, scope).filter(Boolean).join(" ").toLowerCase();
+                const hay = getFieldValuesForScope(item, scope, state.entity).filter(Boolean).join(" ").toLowerCase();
                 const matchesAll = tokens.every(tok => hay.includes(tok));
                 if (!matchesAll) return false;
             }
@@ -906,13 +1089,44 @@
                 if (prec === "terminating_exact" && (v.valueSource !== "computed" || v.isTruncated)) return false;
                 if (prec === "nist_source" && v.valueSource !== "nist") return false;
                 if (storage && v.recommendedNumericType !== storage) return false;
+            } else if (state.entity === "quantities") {
+                const qType = document.getElementById("filter-quantity-type") ? document.getElementById("filter-quantity-type").value : "";
+                if (qType === "ratio" && !item.isRatio) return false;
+                if (qType === "relationship" && !item.isRelationship) return false;
+                if (qType === "physical" && (item.isRatio || item.isRelationship)) return false;
+            } else if (state.entity === "concepts") {
+                const cType = document.getElementById("filter-concept-type") ? document.getElementById("filter-concept-type").value : "";
+                if (cType === "quantity" && !item.isQuantity) return false;
+                if (cType === "taxonomic" && item.isQuantity) return false;
+                if (cType === "ratio" && !item.isRatio) return false;
+                if (cType === "relationship" && !item.isRelationship) return false;
+            } else if (state.entity === "units") {
+                const uType = document.getElementById("filter-unit-type") ? document.getElementById("filter-unit-type").value : "";
+                if (uType === "has_ucum" && !item.ucumCode) return false;
+                if (uType === "has_si" && !item.siExpression) return false;
+                if (uType === "has_constants" && (!item.constants || item.constants.length === 0)) return false;
+            } else if (state.entity === "versions") {
+                const vEra = document.getElementById("filter-version-era") ? document.getElementById("filter-version-era").value : "";
+                const yr = parseInt(item.id, 10);
+                if (vEra === "revised_si" && yr < 2018) return false;
+                if (vEra === "legacy_si" && yr >= 2018) return false;
             }
             return true;
         });
 
         const countText = `${state.filtered.length} of ${state.items.length}`;
-        document.getElementById("visible-count").textContent = countText;
-        document.getElementById("generic-visible-count").textContent = countText;
+        const countEls = {
+            constants: document.getElementById("visible-count"),
+            quantities: document.getElementById("quantity-visible-count"),
+            concepts: document.getElementById("concept-visible-count"),
+            units: document.getElementById("unit-visible-count"),
+            versions: document.getElementById("version-visible-count")
+        };
+        if (countEls[state.entity]) {
+            countEls[state.entity].textContent = countText;
+        }
+        const genCount = document.getElementById("generic-visible-count");
+        if (genCount) genCount.textContent = countText;
 
         renderSidebarList();
 
@@ -1449,16 +1663,14 @@
         if (ver && document.getElementById("filter-version")) {
             document.getElementById("filter-version").value = ver;
         }
-        if (scopeParam && document.getElementById("search-scope")) {
-            document.getElementById("search-scope").value = scopeParam;
-        }
+        adjustSearchScopeOptions(ent, scopeParam);
         if (qParam && document.getElementById("explorer-search")) {
             document.getElementById("explorer-search").value = qParam;
             const clearBtn = document.getElementById("search-clear-btn");
             if (clearBtn) clearBtn.style.display = "inline-flex";
         }
         updateSearchPlaceholder();
-        switchEntity(ent, id, false);
+        switchEntity(ent, id, false, scopeParam);
     });
 </script>
 {% endblock %}
