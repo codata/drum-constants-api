@@ -156,8 +156,8 @@ def test_historical_evolution_navigation_support(client):
     assert "historical-view-banner" in resp.text
     assert "active-history-row" in resp.text
     assert "btn-version-pill" in resp.text
-    assert "btn-inspect-version" in resp.text
-    assert "Actions" in resp.text
+    assert "icon-link-btn" in resp.text
+    assert "btn-inspect-version" not in resp.text
     assert "Release &amp; Role" in resp.text
     assert "● Active" not in resp.text
 

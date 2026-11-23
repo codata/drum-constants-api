@@ -468,22 +468,25 @@
         padding: 0.5rem 0.65rem;
     }
 
-    .btn-inspect-version {
-        background: #eef2ff;
-        color: #1e3a8a;
-        border: 1px solid #c7d2fe;
-        padding: 0.25rem 0.65rem;
-        border-radius: 6px;
-        font-size: 0.76rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.15s;
+    .icon-link-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 5px;
+        color: #475569;
+        text-decoration: none;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        transition: all 0.15s ease;
     }
 
-    .btn-inspect-version:hover {
-        background: #3b5bdb;
-        color: white;
-        border-color: #3b5bdb;
+    .icon-link-btn:hover {
+        background: #e0e7ff;
+        color: #1e3a8a;
+        border-color: #a5b4fc;
+        transform: translateY(-1px);
     }
 </style>
 {% endblock %}
@@ -1169,18 +1172,15 @@
                     </td>
                     <td style="white-space:nowrap;">${vSrc}</td>
                     <td style="white-space:nowrap;">${vType}</td>
-                    <td style="text-align: right; white-space: nowrap;">
-                        ${isActive ? '' : `
-                            <button type="button" class="btn-inspect-version"
-                                onclick="event.stopPropagation(); selectConstantVersion('${escapeHtml(v.versionId)}')"
-                                title="Inspect ${escapeHtml(v.versionId)} value in Explorer">
-                                🔍 Inspect
-                            </button>
-                        `}
+                    <td style="text-align: center; width: 34px; padding: 0.35rem 0.4rem;">
                         <a href="${ROOT_PATH}/constants/${encodeURIComponent(c.id)}/${encodeURIComponent(v.versionId)}" target="_blank"
-                            class="chip" style="font-size:0.74rem;padding:0.2rem 0.5rem;margin-left:0.25rem;"
-                            onclick="event.stopPropagation();" title="Open standalone page for ${escapeHtml(v.versionId)} value in new tab">
-                            Page ↗
+                            class="icon-link-btn"
+                            onclick="event.stopPropagation();" title="Open standalone page for ${escapeHtml(v.versionId)} release in new tab">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                <polyline points="15 3 21 3 21 9"></polyline>
+                                <line x1="10" y1="14" x2="21" y2="3"></line>
+                            </svg>
                         </a>
                     </td>
                 </tr>
@@ -1287,11 +1287,11 @@
                     <thead>
                         <tr>
                             <th style="white-space: nowrap;">Release &amp; Role</th>
-                            <th style="min-width: 170px;">Canonical Value</th>
+                            <th style="min-width: 160px;">Canonical Value</th>
                             <th style="white-space: nowrap;">Uncertainty</th>
                             <th style="white-space: nowrap;">Source</th>
                             <th style="white-space: nowrap;">Storage</th>
-                            <th style="text-align: right; white-space: nowrap;">Actions</th>
+                            <th style="text-align: center; width: 34px; padding: 0.5rem 0.4rem;" title="Open standalone page in new tab">↗</th>
                         </tr>
                     </thead>
                     <tbody>${historyRows}</tbody>
