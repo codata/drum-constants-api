@@ -644,8 +644,10 @@ def run_sparql_query(query: str) -> Any:
     """Execute a SPARQL query against the global RDF graph. Returns raw results."""
     g = _require_graph()
 
-    normalized_query = " ".join(query.split())
-    query_key = f"{id(g)}:{hashlib.sha256(normalized_query.encode()).hexdigest()}"
+    # Key on the exact query text. Collapsing whitespace is not safe: it also
+    # changes string literals, so different queries ("a  b" vs "a b") would
+    # share a cache entry and the second would get the first one's answer.
+    query_key = f"{id(g)}:{hashlib.sha256(query.encode()).hexdigest()}"
 
     if query_key in QUERY_CACHE:
         return QUERY_CACHE[query_key]
