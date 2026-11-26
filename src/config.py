@@ -16,6 +16,20 @@ class Settings(BaseSettings):
     SPARQL_CACHE_MAX_TOTAL_ROWS: int = Field(100_000, ge=0)
     SPARQL_CACHE_MAX_ENTRY_ROWS: int = Field(10_000, ge=0)
 
+    # Limits for client-supplied queries on /sparql (see docs/SPARQL_LIMITS.md).
+    # All limits apply per worker process.
+    SPARQL_TIMEOUT_SECONDS: float = Field(10.0, gt=0, le=600)
+    SPARQL_MAX_QUERY_MEMORY_MB: int = Field(512, ge=64)
+    SPARQL_MAX_CONCURRENT_QUERIES: int = Field(4, ge=1, le=64)
+    SPARQL_MAX_WAITING_QUERIES: int = Field(4, ge=0)
+    SPARQL_MAX_WAIT_SECONDS: float = Field(2.0, ge=0, le=60)
+    SPARQL_MAX_RESULT_ROWS: int = Field(100_000, ge=1)
+    # The largest full-dataset response today is ~17 MB (SELECT * as XML).
+    SPARQL_MAX_RESPONSE_BYTES: int = Field(32 * 1024 * 1024, ge=1024)
+    # Run queries in-process, without time or memory limits, where query
+    # isolation is unavailable (anything but Linux). Local development only.
+    SPARQL_ALLOW_UNISOLATED: bool = False
+
     model_config = SettingsConfigDict(env_file=".env")
 
 settings = Settings()

@@ -1,14 +1,25 @@
+import asyncio
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+import ctypes
 from datetime import date
 from decimal import Decimal
 import hashlib
+import gc
 import json
 import logging
 import os
 from pathlib import Path
 import re
+try:
+    import resource
+except ImportError:  # Windows
+    resource = None  # type: ignore[assignment]
+import select
+import signal
 import sys
+import threading
 import time
 from typing import Any, List, Optional
 import urllib.parse
@@ -23,7 +34,9 @@ from rdflib.plugin import register
 import rdflib.plugins.sparql
 from rdflib.plugins.sparql import prepareQuery
 from rdflib.plugins.sparql.parserutils import CompValue
+from rdflib.plugins.sparql.sparql import SPARQLError
 from rdflib.serializer import Serializer
+from pyparsing import ParseBaseException
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
@@ -343,7 +356,9 @@ async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPE
             },
         )
 
-    return JSONResponse(status_code=exc.status_code, content={"detail": str(exc.detail)})
+    return JSONResponse(
+        status_code=exc.status_code, content={"detail": str(exc.detail)}, headers=getattr(exc, "headers", None)
+    )
 
 
 @app.exception_handler(HTTPException)
@@ -353,7 +368,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     if exc.status_code == 404:
         response_content["path"] = request.url.path
         response_content["method"] = request.method
-    return JSONResponse(status_code=exc.status_code, content=response_content)
+    return JSONResponse(status_code=exc.status_code, content=response_content, headers=exc.headers)
 
 
 class GraphNotInitializedError(Exception):
@@ -704,8 +719,42 @@ def _serialize_rdf_graph(result_graph: Graph, accept: str) -> Response:
     return Response(result_graph.serialize(format="turtle-hp"), media_type="text/turtle")
 
 
-def run_sparql_query(query: str) -> Any:
-    """Execute a SPARQL query against the global RDF graph. Returns raw results."""
+def _is_client_query_error(e: BaseException) -> bool:
+    """Heuristic: True if an exception from parsing/evaluating a query is the query's fault.
+
+    rdflib has no single exception type for mistakes in a query. Measured with
+    rdflib 7.6: syntax errors raise pyparsing ParseException, an unknown prefix
+    raises a plain Exception, a bad regex raises re.error, STRLANG with a
+    non-string or an out-of-range LIMIT raise ValueError, deep nesting raises
+    RecursionError, and evaluation errors can raise SPARQLError. Everything
+    else (TypeError, AttributeError, KeyError, MemoryError, UnicodeError, ...)
+    is treated as a server-side failure.
+
+    This cannot be exact: an internal ValueError or plain Exception is also
+    classified as a client error (and its message, bounded in length, returned
+    with 400). Re-run tests/test_security.py when upgrading rdflib or pyparsing.
+    """
+    if isinstance(e, UnicodeError):
+        return False
+    if isinstance(e, (ParseBaseException, SPARQLError, RecursionError, re.error, ValueError)):
+        return True
+    return type(e) is Exception
+
+
+def _query_error(e: Exception) -> "SparqlQueryError":
+    if isinstance(e, RecursionError):
+        return SparqlQueryError("SPARQL query is nested too deeply", e)
+    return SparqlQueryError(f"SPARQL query error: {str(e)}", e)
+
+
+def run_sparql_query(query: str, *, use_cache: bool = True) -> Any:
+    """Execute a SPARQL query against the global RDF graph. Returns raw results.
+
+    use_cache=False bypasses QUERY_CACHE completely (no lookup, no insertion);
+    client-supplied queries on /sparql always use it. Exceptions that
+    _is_client_query_error() classifies as mistakes in the query are raised as
+    SparqlQueryError; all others propagate unchanged.
+    """
     g = _require_graph()
 
     # Key on the exact query text. Collapsing whitespace is not safe: it also
@@ -713,15 +762,18 @@ def run_sparql_query(query: str) -> Any:
     # share a cache entry and the second would get the first one's answer.
     query_key = f"{id(g)}:{hashlib.sha256(query.encode()).hexdigest()}"
 
-    cached = QUERY_CACHE.get(query_key)
-    if cached is not None:
-        return cached
+    if use_cache:
+        cached = QUERY_CACHE.get(query_key)
+        if cached is not None:
+            return cached
 
     try:
         init_ns = dict(g.namespaces())
         prepared = prepareQuery(query, initNs=init_ns)
     except Exception as e:
-        raise SparqlQueryError(f"SPARQL query error: {str(e)}", e)
+        if _is_client_query_error(e):
+            raise _query_error(e) from e
+        raise
 
     if _contains_service(prepared.algebra):
         raise SparqlQueryError("SPARQL SERVICE (federated query) is not supported by this endpoint")
@@ -734,14 +786,553 @@ def run_sparql_query(query: str) -> Any:
         else:
             _ = results.graph
         duration = time.time() - start_time
-
-        QUERY_CACHE.put(query_key, results, _result_rows(results))
-        if duration > 0.5:
-            logger.info(f"SPARQL query took {duration:.2f}s (hash: {query_key[:16]}...)")
-
-        return results
     except Exception as e:
-        raise SparqlQueryError(f"SPARQL query error: {str(e)}", e)
+        if _is_client_query_error(e):
+            raise _query_error(e) from e
+        raise
+
+    if use_cache:
+        QUERY_CACHE.put(query_key, results, _result_rows(results))
+    if duration > 0.5:
+        logger.info(f"SPARQL query took {duration:.2f}s (hash: {query_key[:16]}...)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Execution of client-supplied SPARQL queries (/sparql)
+#
+# Every query runs in its own child process, forked from a dedicated executor
+# thread. The child
+#   - inherits the loaded graph copy-on-write (nothing is reloaded or pickled),
+#   - is killed by the kernel if that thread or the worker process dies
+#     (PR_SET_PDEATHSIG), so it cannot outlive its supervisor,
+#   - closes every inherited file descriptor except its result pipe,
+#   - gets an address-space limit (RLIMIT_AS) of its starting size plus
+#     SPARQL_MAX_QUERY_MEMORY_MB, never above an inherited limit.
+# If any of these cannot be set up, the query is refused (503).
+#
+# One deadline (SPARQL_TIMEOUT_SECONDS) covers evaluation, serialization, the
+# transfer of the result and waiting for the child to exit; after that the
+# child is killed and reaped within a short grace period (_KILL_GRACE_SECONDS).
+#
+# Admission runs on the event loop before any thread or process is used: at
+# most SPARQL_MAX_CONCURRENT_QUERIES execute, at most SPARQL_MAX_WAITING_QUERIES
+# wait (for at most SPARQL_MAX_WAIT_SECONDS), everything else gets 503 at once.
+# A slot is released when the execution finishes, not when the request ends,
+# so a cancelled request cannot free a slot while its query is still running.
+# All limits are per worker process. Linux only; elsewhere /sparql answers 503
+# unless SPARQL_ALLOW_UNISOLATED is set (development only).
+# ---------------------------------------------------------------------------
+
+
+class SparqlLimitError(Exception):
+    """Base class for query rejections caused by a resource limit."""
+
+    status_code = 503
+
+
+class SparqlTimeoutError(SparqlLimitError):
+    """The query did not finish within SPARQL_TIMEOUT_SECONDS."""
+
+
+class SparqlMemoryError(SparqlLimitError):
+    """The query process ran out of its memory allowance."""
+
+
+class SparqlResultTooLargeError(SparqlLimitError):
+    """The result exceeds SPARQL_MAX_RESULT_ROWS or SPARQL_MAX_RESPONSE_BYTES."""
+
+    status_code = 400
+
+
+class SparqlBusyError(SparqlLimitError):
+    """No execution slot is free and the waiting queue is full."""
+
+
+class SparqlUnavailableError(Exception):
+    """Public query execution is disabled or a query process could not be set up."""
+
+
+class SparqlInternalError(Exception):
+    """The query process failed for a reason that is not the client's fault."""
+
+
+_HEADER_MAX_BYTES = 4096
+_KILL_GRACE_SECONDS = 2.0
+_IS_LINUX = sys.platform.startswith("linux")
+_LIBC = ctypes.CDLL(None, use_errno=True) if _IS_LINUX else None
+_PR_SET_PDEATHSIG = 1
+
+
+def _sparql_isolation_available() -> bool:
+    return _IS_LINUX and hasattr(os, "fork")
+
+
+if not _sparql_isolation_available():
+    if settings.SPARQL_ALLOW_UNISOLATED:
+        logger.warning(
+            "SPARQL queries will run in-process WITHOUT time or memory limits "
+            "(SPARQL_ALLOW_UNISOLATED=true). Do not use this setting in production."
+        )
+    else:
+        logger.error(
+            "Query isolation needs Linux; /sparql will answer 503. "
+            "Set SPARQL_ALLOW_UNISOLATED=true for local development only."
+        )
+
+
+class _SparqlAdmission:
+    """Admission to query execution. Slots belong to executions, not to requests.
+
+    Used on the event loop. Queries run on a dedicated executor with exactly
+    SPARQL_MAX_CONCURRENT_QUERIES threads; a slot is released from the
+    executor's done-callback when the blocking function has returned (or was
+    cancelled before it started), never merely because the awaiting request
+    was cancelled.
+    """
+
+    def __init__(self) -> None:
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._sem: Optional[asyncio.Semaphore] = None
+        self._executor: Optional[ThreadPoolExecutor] = None
+        self._waiting = 0
+
+    def reset(self) -> None:
+        """Start afresh (picks up changed settings; used by tests)."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+        self._loop, self._sem, self._executor, self._waiting = None, None, None, 0
+
+    def _ensure(self) -> tuple[asyncio.AbstractEventLoop, asyncio.Semaphore, ThreadPoolExecutor]:
+        loop = asyncio.get_running_loop()
+        if self._sem is None or self._loop is not loop:
+            self.reset()
+            n = settings.SPARQL_MAX_CONCURRENT_QUERIES
+            self._loop = loop
+            self._sem = asyncio.Semaphore(n)
+            self._executor = ThreadPoolExecutor(max_workers=n, thread_name_prefix="sparql-query")
+        assert self._sem is not None and self._executor is not None
+        return loop, self._sem, self._executor
+
+    async def _acquire(self, sem: asyncio.Semaphore) -> None:
+        if not sem.locked():
+            await sem.acquire()
+            return
+        if self._waiting >= settings.SPARQL_MAX_WAITING_QUERIES:
+            raise SparqlBusyError("The SPARQL endpoint is busy; try again later")
+        self._waiting += 1
+        try:
+            await asyncio.wait_for(sem.acquire(), timeout=settings.SPARQL_MAX_WAIT_SECONDS)
+        except TimeoutError:
+            raise SparqlBusyError("The SPARQL endpoint is busy; try again later")
+        finally:
+            self._waiting -= 1
+
+    @staticmethod
+    def _release_from_thread(loop: asyncio.AbstractEventLoop, sem: asyncio.Semaphore) -> None:
+        try:
+            loop.call_soon_threadsafe(sem.release)
+        except RuntimeError:
+            pass  # event loop already closed: nothing left to admit
+
+    async def run(self, fn: Any, *args: Any) -> Any:
+        loop, sem, executor = self._ensure()
+        await self._acquire(sem)
+        # No await between acquiring and submitting: cancellation cannot leak the slot.
+        try:
+            cfut = executor.submit(fn, *args)
+        except BaseException:
+            sem.release()
+            raise
+        cfut.add_done_callback(lambda _f: self._release_from_thread(loop, sem))
+        return await asyncio.wrap_future(cfut)
+
+
+SPARQL_ADMISSION = _SparqlAdmission()
+
+
+def _execute_and_serialize(query: str, accept: str) -> tuple[bytes, str]:
+    """Run a client query (never cached), enforce the result limits, serialize it."""
+    results = run_sparql_query(query, use_cache=False)
+    rows = _result_rows(results)
+    max_rows = settings.SPARQL_MAX_RESULT_ROWS
+    if rows > max_rows:
+        raise SparqlResultTooLargeError(
+            f"Query result has {rows} rows/triples, more than the limit of {max_rows}. "
+            "Add a LIMIT clause or narrow the query."
+        )
+    response = format_sparql_results(results, accept)
+    body = bytes(response.body)
+    max_bytes = settings.SPARQL_MAX_RESPONSE_BYTES
+    if len(body) > max_bytes:
+        raise SparqlResultTooLargeError(
+            f"Serialized result is {len(body)} bytes, more than the limit of {max_bytes}. "
+            "Add a LIMIT clause or narrow the query."
+        )
+    return body, str(response.media_type)
+
+
+# --- set-up steps run in the child; any failure refuses the query ------------
+
+
+def _set_parent_death_signal(parent_pid: int) -> None:
+    """Ask the kernel to SIGKILL this child when its parent thread/process dies."""
+    if _LIBC is None or _LIBC.prctl(_PR_SET_PDEATHSIG, signal.SIGKILL, 0, 0, 0) != 0:
+        raise OSError(ctypes.get_errno() if _LIBC is not None else 0, "prctl(PR_SET_PDEATHSIG) failed")
+    if os.getppid() != parent_pid:  # parent died before prctl took effect
+        os._exit(1)
+
+
+def _close_inherited_fds(keep: int) -> None:
+    """Close every inherited descriptor above stderr except `keep` (Linux: /proc/self/fd)."""
+    for name in os.listdir("/proc/self/fd"):
+        fd = int(name)
+        if fd > 2 and fd != keep:
+            try:
+                os.close(fd)
+            except OSError:
+                pass  # e.g. the descriptor of the listing itself, already closed
+
+
+def _limit_child_memory(extra_mb: int) -> None:
+    """Cap the address space at the current size + extra_mb, never above an inherited limit.
+
+    The child starts as a copy of the server (graph included), so the limit is
+    relative to the address space it inherited. Note that RLIMIT_AS limits
+    address space, not physical memory: copy-on-write of inherited pages can
+    add up to the inherited size in physical memory on top of the allowance.
+    """
+    with open("/proc/self/statm") as f:
+        current = int(f.read().split()[0]) * os.sysconf("SC_PAGE_SIZE")
+    old_soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    soft = current + extra_mb * 1024 * 1024
+    for inherited in (old_soft, hard):
+        if inherited != resource.RLIM_INFINITY:
+            soft = min(soft, inherited)
+    resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
+
+
+def _encode_header(header: dict[str, Any]) -> bytes:
+    """Serialize a result header so that it always fits in _HEADER_MAX_BYTES.
+
+    Error messages can contain parts of the query (up to SPARQL_MAX_QUERY_LENGTH
+    characters), so a long message is truncated. json.dumps escapes non-ASCII
+    characters as \\uXXXX, and characters outside the Basic Multilingual Plane
+    as a surrogate pair: at most 12 bytes per character, which bounds the
+    encoded size of the truncated message.
+    """
+    encoded = json.dumps(header).encode()
+    if len(encoded) < _HEADER_MAX_BYTES:
+        return encoded
+    header = dict(header)
+    message = str(header.get("message", ""))
+    keep = (_HEADER_MAX_BYTES - 512) // 12
+    header["message"] = message[:keep] + " ... (message truncated)"
+    encoded = json.dumps(header).encode()
+    if len(encoded) < _HEADER_MAX_BYTES:
+        return encoded
+    return json.dumps({"kind": "internal", "message": "header too large"}).encode()
+
+
+def _write_result(write_fd: int, header: dict[str, Any], body: bytes = b"") -> None:
+    with os.fdopen(write_fd, "wb") as out:
+        out.write(_encode_header(header) + b"\n")
+        if body:
+            out.write(body)
+
+
+def _sparql_child_main(write_fd: int, query: str, accept: str, parent_pid: int) -> None:
+    """Body of the forked child: apply the resource limits, run the query, report, exit."""
+    exit_code = 0
+    try:
+        try:
+            _set_parent_death_signal(parent_pid)  # first: protect against an orphaned child early
+            gc.freeze()  # never finalize objects inherited from the server
+            _close_inherited_fds(keep=write_fd)
+            _limit_child_memory(settings.SPARQL_MAX_QUERY_MEMORY_MB)
+        except Exception as e:
+            _write_result(write_fd, {"kind": "setup_failed", "message": f"{type(e).__name__}: {e}"})
+            return
+        body = b""
+        try:
+            body, media_type = _execute_and_serialize(query, accept)
+            header: dict[str, Any] = {"kind": "ok", "media_type": media_type, "length": len(body)}
+        except SparqlResultTooLargeError as e:
+            header = {"kind": "too_large", "message": str(e)}
+        except SparqlQueryError as e:
+            header = {"kind": "query_error", "message": e.message}
+        except MemoryError:
+            body = b""
+            header = {"kind": "memory", "message": "Query exceeded the memory limit"}
+        except GraphNotInitializedError:
+            header = {"kind": "no_graph", "message": "RDF graph not initialized"}
+        except Exception as e:
+            header = {"kind": "internal", "message": type(e).__name__}
+        _write_result(write_fd, header, body)
+    except BaseException:
+        exit_code = 1
+    finally:
+        # Leave immediately: never run the server's atexit handlers or finalizers.
+        os._exit(exit_code)
+
+
+# --- supervision in the parent -----------------------------------------------
+
+_UNREAPED: set[int] = set()
+_UNREAPED_LOCK = threading.Lock()
+
+
+def _reap_leftovers() -> None:
+    """Reap children that could not be reaped within the grace period earlier."""
+    with _UNREAPED_LOCK:
+        for pid in list(_UNREAPED):
+            try:
+                done, _ = os.waitpid(pid, os.WNOHANG)
+            except ChildProcessError:
+                done = pid
+            if done:
+                _UNREAPED.discard(pid)
+
+
+# Wait status for a child that is no longer waitable by us (reaped elsewhere):
+# it is gone, but how it ended is unknown, so it never counts as a clean exit.
+_STATUS_UNKNOWN = -1
+
+
+def _wait_child(pid: int, until: float) -> Optional[int]:
+    """Wait for the child without blocking past `until`.
+
+    Returns its wait status, _STATUS_UNKNOWN if it can no longer be waited for,
+    or None if it is still running at `until`. The deadline is checked between
+    polls (every ~2 ms, subject to scheduling), so it is not exact to the
+    millisecond.
+    """
+    while True:
+        try:
+            done, status = os.waitpid(pid, os.WNOHANG)
+        except ChildProcessError:
+            return _STATUS_UNKNOWN
+        if done:
+            return status
+        if time.monotonic() >= until:
+            return None
+        time.sleep(0.002)
+
+
+def _finish_child(pid: int, deadline: float, kill: bool) -> tuple[Optional[int], bool]:
+    """Make sure the child is gone.
+
+    Returns (wait status, _STATUS_UNKNOWN, or None if it could not be reaped;
+    whether forced cleanup was started). With kill=False the child gets until the
+    deadline to exit by itself.
+    """
+    if not kill:
+        # The pipe is closed; the child should exit at once, but EOF is not exit.
+        status = _wait_child(pid, deadline)
+        if status is not None:
+            return status, False
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    status = _wait_child(pid, time.monotonic() + _KILL_GRACE_SECONDS)
+    if status is None:
+        with _UNREAPED_LOCK:
+            _UNREAPED.add(pid)
+        logger.error("SPARQL query process %d did not exit after SIGKILL; will reap later", pid)
+    return status, True
+
+
+class _Deadline:
+    def __init__(self, fd: int, deadline: float, timeout: float):
+        self.deadline = deadline
+        self.timeout = timeout
+        self._poller = select.poll()  # poll(), not select(): server fds can exceed FD_SETSIZE
+        self._poller.register(fd, select.POLLIN | select.POLLHUP)
+
+    def wait_readable(self) -> None:
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0 or not self._poller.poll(remaining * 1000):
+            raise SparqlTimeoutError(f"SPARQL query exceeded the time limit of {self.timeout:g} s")
+
+
+def _read_child_result(fd: int, clock: _Deadline, max_body: int) -> tuple[Optional[dict], bytes]:
+    """Read `header-json \\n body` from the child. Returns (None, b"") if the child
+    died before sending a complete header. Enforces the body limit exactly and
+    keeps at most one copy of the body while reading."""
+    buf = bytearray()
+    while b"\n" not in buf:
+        clock.wait_readable()
+        chunk = os.read(fd, 65536)
+        if not chunk:
+            return None, b""
+        buf += chunk
+        if len(buf) > _HEADER_MAX_BYTES and b"\n" not in buf[:_HEADER_MAX_BYTES]:
+            raise SparqlInternalError("SPARQL query process sent a malformed result")
+    header_line, _, rest = bytes(buf).partition(b"\n")
+    del buf
+    try:
+        header = json.loads(header_line)
+        kind = header["kind"]
+    except (ValueError, KeyError, TypeError):
+        raise SparqlInternalError("SPARQL query process sent a malformed result")
+
+    length = header.get("length", 0) if kind == "ok" else 0
+    if not isinstance(length, int) or length < 0:
+        raise SparqlInternalError("SPARQL query process sent a malformed result")
+    if length > max_body:
+        raise SparqlResultTooLargeError(
+            f"Serialized result is {length} bytes, more than the limit of {max_body}"
+        )
+    if len(rest) > length:
+        raise SparqlInternalError("SPARQL query process sent more data than announced")
+
+    body = bytearray(length)
+    view = memoryview(body)
+    view[: len(rest)] = rest
+    pos = len(rest)
+    del rest
+    while pos < length:
+        clock.wait_readable()
+        n = os.readv(fd, [view[pos:]])
+        if n == 0:
+            return None, b""  # died half-way through the body
+        pos += n
+    clock.wait_readable()
+    if os.read(fd, 1):
+        raise SparqlInternalError("SPARQL query process sent more data than announced")
+    view.release()
+    return header, bytes(body)
+
+
+def _run_sparql_in_child(query: str, accept: str) -> tuple[bytes, str]:
+    """Run one client query in a forked child under a single end-to-end deadline.
+
+    A result (of any kind) is used only if the child has also exited normally,
+    with status 0, by the deadline; otherwise the query fails (503 if it had to
+    be killed, 500 for any other abnormal exit).
+    """
+    _reap_leftovers()
+    with _UNREAPED_LOCK:
+        stuck = len(_UNREAPED)
+    if stuck:
+        # A process that survived SIGKILL no longer holds a slot; refusing new
+        # queries until it is gone keeps the number of query processes within
+        # SPARQL_MAX_CONCURRENT_QUERIES.
+        raise SparqlUnavailableError(
+            "SPARQL queries are temporarily refused: an earlier query process has not exited yet"
+        )
+    timeout = settings.SPARQL_TIMEOUT_SECONDS
+    deadline = time.monotonic() + timeout
+    parent_pid = os.getpid()
+
+    try:
+        read_fd, write_fd = os.pipe()
+    except OSError as e:
+        raise SparqlUnavailableError(f"Could not start a query process ({e.strerror})")
+    try:
+        pid = os.fork()
+    except OSError as e:
+        os.close(read_fd)
+        os.close(write_fd)
+        raise SparqlUnavailableError(f"Could not start a query process ({e.strerror})")
+    if pid == 0:  # child: whatever happens, never return into the server's code
+        try:
+            os.close(read_fd)
+            _sparql_child_main(write_fd, query, accept, parent_pid)
+        finally:
+            os._exit(1)
+    os.close(write_fd)
+
+    complete = False
+    try:
+        header, body = _read_child_result(read_fd, _Deadline(read_fd, deadline, timeout),
+                                          settings.SPARQL_MAX_RESPONSE_BYTES)
+        complete = True
+    finally:
+        os.close(read_fd)
+        status, killed = _finish_child(pid, deadline, kill=not complete)
+
+    known = status is not None and status != _STATUS_UNKNOWN
+    exited_cleanly = known and os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+    if header is not None:
+        # The child reported; the report counts only if it then exited normally
+        # by the deadline. Forced cleanup means the deadline was missed, even if
+        # the child happened to exit normally just before the SIGKILL.
+        if killed:
+            raise SparqlTimeoutError(f"SPARQL query exceeded the time limit of {timeout:g} s")
+        if not exited_cleanly:
+            logger.error("SPARQL query process exited abnormally after reporting (status %s)", status)
+            raise SparqlInternalError("SPARQL query failed because of a server error")
+
+    kind = header.get("kind") if header else None
+    if kind == "ok":
+        return body, header["media_type"]
+    if kind == "query_error":
+        raise SparqlQueryError(header["message"])
+    if kind == "too_large":
+        raise SparqlResultTooLargeError(header["message"])
+    if kind == "memory":
+        raise SparqlMemoryError(header["message"])
+    if kind == "no_graph":
+        raise GraphNotInitializedError()
+    if kind == "setup_failed":
+        logger.error("SPARQL query process could not be resource-limited: %s", header.get("message"))
+        raise SparqlUnavailableError("SPARQL query refused: the query process could not be resource-limited")
+    if kind == "internal":
+        logger.error("SPARQL query process failed: %s", header.get("message"))
+        raise SparqlInternalError("SPARQL query failed because of a server error")
+    # No complete result: the child died before it could report.
+    if status == _STATUS_UNKNOWN:
+        logger.error("SPARQL query process %d ended without a result; exit status unknown", pid)
+        raise SparqlInternalError("SPARQL query failed because of a server error")
+    if status is None or os.WIFSIGNALED(status):
+        logger.warning("SPARQL query process terminated (status %s)", status)
+        raise SparqlMemoryError("SPARQL query process was terminated; it probably exceeded the memory limit")
+    logger.error("SPARQL query process exited abnormally (status %d)", status)
+    raise SparqlInternalError("SPARQL query failed because of a server error")
+
+
+def _run_public_sparql_blocking(query: str, accept: str) -> tuple[bytes, str]:
+    if _sparql_isolation_available():
+        return _run_sparql_in_child(query, accept)
+    if settings.SPARQL_ALLOW_UNISOLATED:
+        try:
+            return _execute_and_serialize(query, accept)
+        except (SparqlQueryError, SparqlResultTooLargeError, GraphNotInitializedError):
+            raise
+        except MemoryError:
+            raise SparqlMemoryError("Query exceeded the available memory")
+        except Exception:
+            logger.exception("SPARQL query failed in-process")
+            raise SparqlInternalError("SPARQL query failed because of a server error")
+    raise SparqlUnavailableError("SPARQL queries are disabled: query isolation needs Linux")
+
+
+async def execute_public_sparql(query: str, accept: str) -> Response:
+    """Run a client-supplied SPARQL query without blocking the event loop.
+
+    Admission is decided on the event loop before any thread or process is
+    used, so the number of running and waiting queries is bounded. Client
+    queries never read or fill QUERY_CACHE. If the client disconnects, the
+    query still runs until it finishes or reaches the time limit, and keeps
+    its slot until then.
+    """
+    try:
+        body, media_type = await SPARQL_ADMISSION.run(_run_public_sparql_blocking, query, accept)
+    except GraphNotInitializedError:
+        raise HTTPException(status_code=503, detail="RDF graph not initialized")
+    except SparqlQueryError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except SparqlBusyError as e:
+        raise HTTPException(status_code=503, detail=str(e), headers={"Retry-After": "5"})
+    except SparqlLimitError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except SparqlUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except SparqlInternalError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return Response(body, media_type=media_type)
 
 
 def _contains_service(node: Any) -> bool:
@@ -1518,14 +2109,7 @@ async def sparql_get(request: Request, query: Optional[str] = None):
             return templates.TemplateResponse(request, "sparql.html", {})
         raise HTTPException(status_code=400, detail="Missing 'query' parameter")
 
-    try:
-        results = run_sparql_query(query)
-    except GraphNotInitializedError:
-        raise HTTPException(status_code=503, detail="RDF graph not initialized")
-    except SparqlQueryError as e:
-        raise HTTPException(status_code=400, detail=e.message)
-
-    return format_sparql_results(results, accept)
+    return await execute_public_sparql(query, accept)
 
 
 @app.post("/sparql")
@@ -1566,15 +2150,8 @@ async def sparql_post(request: Request):
             "application/sparql-query, or application/json",
         )
 
-    try:
-        results = run_sparql_query(query)
-    except GraphNotInitializedError:
-        raise HTTPException(status_code=503, detail="RDF graph not initialized")
-    except SparqlQueryError as e:
-        raise HTTPException(status_code=400, detail=e.message)
-
     accept = _resolve_accept(request)
-    return format_sparql_results(results, accept)
+    return await execute_public_sparql(query, accept)
 
 
 if __name__ == "__main__":

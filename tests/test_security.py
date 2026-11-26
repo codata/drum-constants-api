@@ -120,13 +120,776 @@ def test_negative_cache_settings_are_rejected(name):
         Settings(**{name: -1})
 
 
-def test_large_results_are_not_cached(client):
-    """A full-graph CONSTRUCT (~60k triples) must not be kept in the cache."""
+def test_resource_queries_still_use_the_bounded_cache(client):
+    """The server's own per-resource CONSTRUCT queries are cached (within the bounds)."""
     from src.app import QUERY_CACHE
 
-    before = QUERY_CACHE.total_rows
-    for i in range(3):
-        q = f"CONSTRUCT {{ ?s ?p ?o }} WHERE {{ ?s ?p ?o }} # {i}"
-        r = client.get("/sparql", params={"query": q}, headers={"Accept": "application/n-triples"})
-        assert r.status_code == 200
-    assert QUERY_CACHE.total_rows == before
+    QUERY_CACHE.clear()
+    r = client.get("/constants/PlanckConstant", headers={"Accept": "text/turtle"})
+    assert r.status_code == 200
+    assert len(QUERY_CACHE) == 1
+
+
+# ---------------------------------------------------------------------------
+# Patch 3: isolated execution of client queries
+# ---------------------------------------------------------------------------
+
+import errno
+import json
+import os
+import signal
+import threading
+import time
+
+import rdflib
+
+import src.app as app_module
+from src.config import settings
+
+HEAVY_QUERY = (
+    "SELECT (COUNT(*) AS ?n) WHERE { "
+    "?a a <https://w3id.org/codata/model/ConstantValue> . "
+    "?b a <https://w3id.org/codata/model/Unit> . "
+    "?c a <https://w3id.org/codata/model/Version> . "
+    "?d a <https://w3id.org/codata/model/Unit> }"
+)
+SIMPLE_QUERY = "SELECT ?s WHERE { ?s a <https://w3id.org/codata/model/Unit> } ORDER BY ?s LIMIT 3"
+
+
+def _no_children_left() -> bool:
+    try:
+        os.waitpid(-1, os.WNOHANG)
+    except ChildProcessError:
+        return True
+    return False
+
+
+@pytest.fixture(autouse=True)
+def _fresh_admission():
+    app_module.SPARQL_ADMISSION.reset()
+    yield
+    app_module.SPARQL_ADMISSION.reset()
+    app_module._UNREAPED.clear()
+
+
+def _fake_execute(behaviour):
+    """Replace the query function run inside the child (fork inherits the patch)."""
+
+    def fake(query, accept):
+        return behaviour()
+
+    return fake
+
+
+def test_public_queries_never_touch_the_cache(client, monkeypatch):
+    from src.app import QUERY_CACHE
+
+    QUERY_CACHE.clear()
+    for allow_unisolated, isolated in [(False, True), (True, False)]:
+        monkeypatch.setattr(settings, "SPARQL_ALLOW_UNISOLATED", allow_unisolated)
+        monkeypatch.setattr(app_module, "_sparql_isolation_available", lambda v=isolated: v)
+        for i in range(3):
+            assert client.get("/sparql", params={"query": f"{SIMPLE_QUERY} # {i}"}).status_code == 200
+    assert len(QUERY_CACHE) == 0
+
+    # A planted entry for the same text is not served to a client query.
+    g = app_module._require_graph()
+    import hashlib
+
+    key = f"{id(g)}:{hashlib.sha256(SIMPLE_QUERY.encode()).hexdigest()}"
+    QUERY_CACHE.put(key, "poisoned", 1)
+    r = client.get("/sparql", params={"query": SIMPLE_QUERY})
+    assert r.status_code == 200 and len(r.json()["results"]["bindings"]) == 3
+    QUERY_CACHE.clear()
+
+
+def test_deadline_kills_a_slow_child(client, monkeypatch):
+    monkeypatch.setattr(settings, "SPARQL_TIMEOUT_SECONDS", 1.0)
+    monkeypatch.setattr(app_module, "_execute_and_serialize", _fake_execute(lambda: time.sleep(60)))
+    t0 = time.monotonic()
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 503 and "time limit" in r.json()["detail"]
+    assert time.monotonic() - t0 < 3
+    assert _no_children_left()
+
+
+def test_deadline_covers_a_stalled_result_transfer(client, monkeypatch):
+    """A child that starts writing and then stalls is still killed at the deadline."""
+    monkeypatch.setattr(settings, "SPARQL_TIMEOUT_SECONDS", 1.0)
+
+    def stall_after_header(write_fd, query, accept, parent_pid):
+        os.write(write_fd, b'{"kind": "ok", "media_type": "text/plain", "length": 10}\n12345')
+        time.sleep(60)
+        os._exit(0)
+
+    monkeypatch.setattr(app_module, "_sparql_child_main", stall_after_header)
+    t0 = time.monotonic()
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 503 and "time limit" in r.json()["detail"]
+    assert time.monotonic() - t0 < 3
+    assert _no_children_left()
+
+
+def test_real_slow_query_is_killed_and_health_stays_responsive(client, monkeypatch):
+    monkeypatch.setattr(settings, "SPARQL_TIMEOUT_SECONDS", 2.0)
+    health: dict = {}
+
+    def probe():
+        time.sleep(0.5)
+        t0 = time.monotonic()
+        health["status"] = client.get("/health").status_code
+        health["seconds"] = time.monotonic() - t0
+
+    t = threading.Thread(target=probe)
+    t.start()
+    r = client.get("/sparql", params={"query": HEAVY_QUERY})
+    t.join(10)
+    assert r.status_code == 503
+    assert health["status"] == 200 and health["seconds"] < 1.0
+    assert _no_children_left()
+
+
+def test_memory_limit_stops_a_query(client, monkeypatch):
+    monkeypatch.setattr(settings, "SPARQL_MAX_QUERY_MEMORY_MB", 128)
+
+    def allocate():
+        blocks = []
+        while True:
+            blocks.append(bytearray(64 * 1024 * 1024))
+
+    monkeypatch.setattr(app_module, "_execute_and_serialize", _fake_execute(allocate))
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 503 and "memory" in r.json()["detail"]
+    assert _no_children_left()
+
+
+def test_memory_limit_stops_a_real_query(client, monkeypatch):
+    """ORDER BY over a Cartesian product grew a child to ~940 MB in 10 s before the limit."""
+    monkeypatch.setattr(settings, "SPARQL_MAX_QUERY_MEMORY_MB", 150)
+    monkeypatch.setattr(settings, "SPARQL_TIMEOUT_SECONDS", 20.0)
+    q = (
+        "SELECT ?a ?b ?c WHERE { ?a a <https://w3id.org/codata/model/ConstantValue> . "
+        "?b a <https://w3id.org/codata/model/Unit> . ?c a <https://w3id.org/codata/model/Unit> } "
+        "ORDER BY ?c ?b ?a LIMIT 1"
+    )
+    r = client.get("/sparql", params={"query": q})
+    assert r.status_code == 503 and "memory" in r.json()["detail"]
+
+
+def test_child_killed_by_signal_is_reported_as_resource_failure(client, monkeypatch):
+    monkeypatch.setattr(
+        app_module, "_execute_and_serialize", _fake_execute(lambda: os.kill(os.getpid(), signal.SIGKILL))
+    )
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 503 and "terminated" in r.json()["detail"]
+    assert _no_children_left()
+
+
+def test_unexpected_child_failures_are_server_errors(client, monkeypatch):
+    def boom():
+        raise ValueError("secret internal detail")
+
+    monkeypatch.setattr(app_module, "_execute_and_serialize", _fake_execute(boom))
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 500 and "secret" not in r.text
+
+    monkeypatch.setattr(app_module, "_execute_and_serialize", _fake_execute(lambda: os._exit(3)))
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 500
+    assert _no_children_left()
+
+
+def test_child_closes_inherited_descriptors(client, monkeypatch):
+    def list_fds():
+        targets = []
+        for name in os.listdir("/proc/self/fd"):
+            try:
+                targets.append(os.readlink(f"/proc/self/fd/{name}"))
+            except OSError:
+                pass
+        return json.dumps(targets).encode(), "application/json"
+
+    monkeypatch.setattr(app_module, "_execute_and_serialize", _fake_execute(list_fds))
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 200
+    targets = r.json()
+    assert not [t for t in targets if t.startswith("socket:") or "eventpoll" in t], targets
+    assert len(targets) <= 5  # stdin/stdout/stderr, the result pipe, the /proc listing itself
+
+
+def test_response_byte_limit_in_child(client, monkeypatch):
+    monkeypatch.setattr(settings, "SPARQL_MAX_RESPONSE_BYTES", 2048)
+    r = client.get(
+        "/sparql",
+        params={"query": "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o } LIMIT 200"},
+        headers={"Accept": "application/n-triples"},
+    )
+    assert r.status_code == 400 and "bytes" in r.json()["detail"]
+
+
+@pytest.mark.parametrize("size,status", [(4096, 200), (4097, 400), (10_000_000, 400)])
+def test_response_byte_limit_enforced_exactly_by_parent(client, monkeypatch, size, status):
+    """Even if the child does not check, the parent refuses anything above the limit."""
+    monkeypatch.setattr(settings, "SPARQL_MAX_RESPONSE_BYTES", 4096)
+    monkeypatch.setattr(
+        app_module, "_execute_and_serialize", _fake_execute(lambda: (b"x" * size, "text/plain"))
+    )
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == status
+    if status == 200:
+        assert len(r.content) == size
+    else:
+        assert "limit" in r.json()["detail"]
+    assert _no_children_left()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b'{"kind": "ok", "media_type": "text/plain", "length": 3}\nabcdef',  # more than announced
+        b'{"kind": "ok", "media_type": "text/plain", "length": 30}\nabc',  # less than announced
+        b"not json\n",
+        b"x" * 10000,  # no header line
+    ],
+)
+def test_malformed_child_output_is_a_server_error(client, monkeypatch, payload):
+    def lying_child(write_fd, query, accept, parent_pid):
+        os.write(write_fd, payload)
+        os._exit(0)
+
+    monkeypatch.setattr(app_module, "_sparql_child_main", lying_child)
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 500
+    assert _no_children_left()
+
+
+def test_single_row_with_huge_literal_is_refused(client, monkeypatch):
+    """Row limits do not bound size: one row of doubled CONCATs is refused by the byte limit."""
+    monkeypatch.setattr(settings, "SPARQL_MAX_RESPONSE_BYTES", 1024 * 1024)
+    binds = " ".join(f"BIND(CONCAT(?s{i}, ?s{i}) AS ?s{i + 1})" for i in range(16))
+    q = f'SELECT ?s16 WHERE {{ BIND("{"x" * 32}" AS ?s0) {binds} }}'  # 32 * 2**16 = 2 MiB
+    r = client.get("/sparql", params={"query": q})
+    assert r.status_code == 400 and "bytes" in r.json()["detail"]
+
+
+def test_oversized_result_is_refused(client, monkeypatch):
+    monkeypatch.setattr(settings, "SPARQL_MAX_RESULT_ROWS", 10)
+    r = client.get("/sparql", params={"query": "SELECT * WHERE { ?s ?p ?o } LIMIT 11"})
+    assert r.status_code == 400 and "limit of 10" in r.json()["detail"]
+    assert client.get("/sparql", params={"query": "SELECT * WHERE { ?s ?p ?o } LIMIT 10"}).status_code == 200
+
+
+def _slow(seconds):
+    def slow():
+        time.sleep(seconds)
+        return b'{"boolean": true}', "application/sparql-results+json"
+
+    return slow
+
+
+def test_busy_endpoint_rejects_immediately_with_retry_after(client, monkeypatch):
+    monkeypatch.setattr(settings, "SPARQL_MAX_CONCURRENT_QUERIES", 1)
+    monkeypatch.setattr(settings, "SPARQL_MAX_WAITING_QUERIES", 0)
+    monkeypatch.setattr(app_module, "_execute_and_serialize", _fake_execute(_slow(2)))
+    first: dict = {}
+    t = threading.Thread(target=lambda: first.update(r=client.get("/sparql", params={"query": "ASK {}"})))
+    t.start()
+    time.sleep(0.5)
+    t0 = time.monotonic()
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    elapsed = time.monotonic() - t0
+    t.join(10)
+    assert r.status_code == 503 and r.headers.get("retry-after") == "5"
+    assert elapsed < 0.5
+    assert first["r"].status_code == 200
+
+
+def test_waiting_queue_is_bounded_in_size_and_time(client, monkeypatch):
+    monkeypatch.setattr(settings, "SPARQL_MAX_CONCURRENT_QUERIES", 1)
+    monkeypatch.setattr(settings, "SPARQL_MAX_WAITING_QUERIES", 1)
+    monkeypatch.setattr(settings, "SPARQL_MAX_WAIT_SECONDS", 0.5)
+    monkeypatch.setattr(app_module, "_execute_and_serialize", _fake_execute(_slow(2)))
+    results: dict = {}
+
+    def call(name):
+        results[name] = client.get("/sparql", params={"query": "ASK {}"})
+
+    threads = [threading.Thread(target=call, args=(n,)) for n in ("running",)]
+    threads[0].start()
+    time.sleep(0.3)
+    waiter = threading.Thread(target=call, args=("waiting",))
+    waiter.start()
+    time.sleep(0.1)
+    t0 = time.monotonic()
+    call("overflow")  # queue already full
+    assert time.monotonic() - t0 < 0.3
+    for t in threads + [waiter]:
+        t.join(10)
+    assert results["running"].status_code == 200
+    assert results["waiting"].status_code == 503  # waited 0.5 s, then gave up
+    assert results["overflow"].status_code == 503
+
+
+def test_fails_closed_without_isolation(client, monkeypatch):
+    monkeypatch.setattr(app_module, "_sparql_isolation_available", lambda: False)
+    monkeypatch.setattr(settings, "SPARQL_ALLOW_UNISOLATED", False)
+    r = client.get("/sparql", params={"query": SIMPLE_QUERY})
+    assert r.status_code == 503 and "disabled" in r.json()["detail"]
+    monkeypatch.setattr(settings, "SPARQL_ALLOW_UNISOLATED", True)
+    assert client.get("/sparql", params={"query": SIMPLE_QUERY}).status_code == 200
+
+
+def test_fork_failure_is_503_and_leaks_nothing(client, monkeypatch):
+    def no_fork():
+        raise OSError(errno.EAGAIN, "Resource temporarily unavailable")
+
+    before = len(os.listdir("/proc/self/fd"))
+    monkeypatch.setattr(app_module.os, "fork", no_fork)
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 503 and "query process" in r.json()["detail"]
+    assert len(os.listdir("/proc/self/fd")) == before
+
+
+EQUIVALENCE_CASES = [
+    (
+        "SELECT ?c ?v ?u WHERE { ?c <https://w3id.org/codata/model/hasValue> ?cv . "
+        "?cv <https://w3id.org/codata/model/value> ?v . "
+        "OPTIONAL { ?cv <https://w3id.org/codata/model/uncertainty> ?u } } ORDER BY ?c ?v LIMIT 500",
+        "application/sparql-results+json",
+    ),
+    (SIMPLE_QUERY, "application/sparql-results+xml"),
+    ("ASK { ?s a <https://w3id.org/codata/model/Unit> }", "application/sparql-results+json"),
+    (
+        "CONSTRUCT { ?cv ?p ?o } WHERE { <https://w3id.org/codata/constants/PlanckConstant> "
+        "<https://w3id.org/codata/model/hasValue> ?cv . ?cv ?p ?o }",
+        "application/n-triples",
+    ),
+    ("DESCRIBE <https://w3id.org/codata/constants/ElementaryCharge>", "text/turtle"),
+    (
+        "CONSTRUCT { ?cv ?p ?o } WHERE { <https://w3id.org/codata/constants/ReducedPlanckConstant> "
+        "<https://w3id.org/codata/model/hasValue> ?cv . ?cv ?p ?o }",
+        "application/ld+json",
+    ),
+]
+
+
+def _canonical(body: bytes, media_type: str):
+    if "json" in media_type and "ld+json" not in media_type:
+        return json.loads(body)
+    if media_type.startswith("application/sparql-results+xml"):
+        return body
+    fmt = {"application/n-triples": "nt", "text/turtle": "turtle", "application/ld+json": "json-ld"}[
+        media_type.split(";")[0]
+    ]
+    g = rdflib.Graph().parse(data=body, format=fmt)
+    return sorted(g)
+
+
+@pytest.mark.parametrize("query,accept", EQUIVALENCE_CASES)
+def test_isolated_and_inprocess_results_are_identical(client, monkeypatch, query, accept):
+    """Same RDF terms, datatypes and lexical forms (incl. full-precision values) in both modes."""
+    isolated = client.get("/sparql", params={"query": query}, headers={"Accept": accept})
+    monkeypatch.setattr(app_module, "_sparql_isolation_available", lambda: False)
+    monkeypatch.setattr(settings, "SPARQL_ALLOW_UNISOLATED", True)
+    inprocess = client.get("/sparql", params={"query": query}, headers={"Accept": accept})
+    assert isolated.status_code == inprocess.status_code == 200
+    assert isolated.headers["content-type"] == inprocess.headers["content-type"]
+    media = isolated.headers["content-type"]
+    assert _canonical(isolated.content, media) == _canonical(inprocess.content, media)
+    assert len(isolated.content) > 0
+
+
+@pytest.mark.parametrize(
+    "name,value",
+    [
+        ("SPARQL_TIMEOUT_SECONDS", 0),
+        ("SPARQL_TIMEOUT_SECONDS", -1),
+        ("SPARQL_TIMEOUT_SECONDS", float("inf")),
+        ("SPARQL_MAX_CONCURRENT_QUERIES", 0),
+        ("SPARQL_MAX_WAITING_QUERIES", -1),
+        ("SPARQL_MAX_RESULT_ROWS", 0),
+        ("SPARQL_MAX_RESPONSE_BYTES", 10),
+        ("SPARQL_MAX_QUERY_MEMORY_MB", 1),
+    ],
+)
+def test_invalid_query_limit_settings_are_rejected(name, value):
+    from pydantic import ValidationError
+
+    from src.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(**{name: value})
+
+
+# --- v3: slot ownership, process supervision, resource-limit set-up, error classes ---
+
+
+def test_cancelled_request_keeps_its_slot_until_execution_ends(monkeypatch):
+    """Cancelling the awaiting request must not free the slot while the query runs."""
+    import asyncio
+
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(settings, "SPARQL_MAX_CONCURRENT_QUERIES", 1)
+    monkeypatch.setattr(settings, "SPARQL_MAX_WAITING_QUERIES", 0)
+    finished = threading.Event()
+
+    def slow_blocking(query, accept):
+        time.sleep(1.0)
+        finished.set()
+        return b"{}", "application/json"
+
+    monkeypatch.setattr(app_module, "_run_public_sparql_blocking", slow_blocking)
+
+    async def scenario():
+        first = asyncio.create_task(app_module.execute_public_sparql("ASK {}", ""))
+        await asyncio.sleep(0.2)
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        # The cancelled request's query is still running: no slot may be free.
+        with pytest.raises(HTTPException) as busy:
+            await app_module.execute_public_sparql("ASK {}", "")
+        assert busy.value.status_code == 503
+        assert not finished.is_set()
+        await asyncio.sleep(1.2)
+        assert finished.is_set()
+        ok = await app_module.execute_public_sparql("ASK {}", "")
+        assert ok.status_code == 200
+
+    asyncio.run(scenario())
+
+
+def test_child_that_lingers_after_closing_its_pipe_is_bounded(client, monkeypatch):
+    """EOF is not exit: a child that closes its pipe and stays alive is killed at the
+    deadline, and its result is not used (strict deadline policy)."""
+    monkeypatch.setattr(settings, "SPARQL_TIMEOUT_SECONDS", 1.0)
+
+    def linger(write_fd, query, accept, parent_pid):
+        os.write(write_fd, b'{"kind": "ok", "media_type": "text/plain", "length": 2}\nok')
+        os.close(write_fd)
+        time.sleep(60)
+        os._exit(0)
+
+    monkeypatch.setattr(app_module, "_sparql_child_main", linger)
+    t0 = time.monotonic()
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert time.monotonic() - t0 < 2.5
+    assert r.status_code == 503 and "time limit" in r.json()["detail"]
+    assert _no_children_left()
+
+
+def test_child_that_survives_sigkill_does_not_block_the_worker(monkeypatch):
+    """If a child cannot be reaped within the grace period it is recorded and reaped later."""
+    pid = os.fork()
+    if pid == 0:
+        try:
+            time.sleep(60)
+        finally:
+            os._exit(0)
+    real_kill = os.kill
+    monkeypatch.setattr(app_module.os, "kill", lambda p, s: None)  # simulate a child stuck in the kernel
+    monkeypatch.setattr(app_module, "_KILL_GRACE_SECONDS", 0.3)
+    t0 = time.monotonic()
+    status, killed = app_module._finish_child(pid, deadline=time.monotonic(), kill=True)
+    assert status is None and killed and time.monotonic() - t0 < 1.0
+    assert pid in app_module._UNREAPED
+    monkeypatch.setattr(app_module.os, "kill", real_kill)
+    real_kill(pid, signal.SIGKILL)
+    time.sleep(0.2)
+    app_module._reap_leftovers()
+    assert pid not in app_module._UNREAPED
+    assert _no_children_left()
+
+
+def test_query_refused_when_resource_limits_cannot_be_set_up(client, monkeypatch):
+    def no_statm(extra_mb):
+        raise OSError(2, "No such file or directory: '/proc/self/statm'")
+
+    monkeypatch.setattr(app_module, "_limit_child_memory", no_statm)
+    r = client.get("/sparql", params={"query": SIMPLE_QUERY})
+    assert r.status_code == 503 and "resource-limited" in r.json()["detail"]
+    assert _no_children_left()
+
+
+def _in_forked_child(fn) -> int:
+    """Run fn() in a forked child; return its exit code (0 = fn returned True)."""
+    pid = os.fork()
+    if pid == 0:
+        code = 1
+        try:
+            code = 0 if fn() else 2
+        finally:
+            os._exit(code)
+    _, status = os.waitpid(pid, 0)
+    return os.waitstatus_to_exitcode(status)
+
+
+def test_memory_limit_never_relaxes_an_inherited_soft_limit():
+    import resource
+
+    def check():
+        strict = 8 * 1024**3  # well above current use, below current + 512 MB? use current + 64 MB
+        with open("/proc/self/statm") as f:
+            current = int(f.read().split()[0]) * os.sysconf("SC_PAGE_SIZE")
+        strict = current + 64 * 1024 * 1024
+        _, hard = resource.getrlimit(resource.RLIMIT_AS)
+        resource.setrlimit(resource.RLIMIT_AS, (strict, hard))
+        app_module._limit_child_memory(512)
+        soft_after, hard_after = resource.getrlimit(resource.RLIMIT_AS)
+        return soft_after == strict and hard_after == hard
+
+    assert _in_forked_child(check) == 0
+
+
+def test_memory_limit_is_relative_to_inherited_size():
+    import resource
+
+    def check():
+        with open("/proc/self/statm") as f:
+            current = int(f.read().split()[0]) * os.sysconf("SC_PAGE_SIZE")
+        app_module._limit_child_memory(256)
+        soft, _ = resource.getrlimit(resource.RLIMIT_AS)
+        return current + 255 * 1024**2 < soft <= current + 257 * 1024**2
+
+    assert _in_forked_child(check) == 0
+
+
+def _process_gone(pid: int) -> bool:
+    try:
+        with open(f"/proc/{pid}/status") as f:
+            return any(line.startswith("State:") and "Z" in line for line in f)
+    except FileNotFoundError:
+        return True
+
+
+def test_query_child_dies_with_its_parent():
+    """A worker killed by its process manager must not leave query processes behind."""
+    r, w = os.pipe()
+    supervisor = os.fork()
+    if supervisor == 0:  # stands in for a worker process
+        try:
+            os.close(r)
+            me = os.getpid()
+            child = os.fork()
+            if child == 0:
+                try:
+                    app_module._set_parent_death_signal(me)
+                    time.sleep(60)
+                finally:
+                    os._exit(0)
+            os.write(w, str(child).encode())
+            time.sleep(60)
+        finally:
+            os._exit(0)
+    os.close(w)
+    time.sleep(0.5)
+    grandchild = int(os.read(r, 32))
+    os.close(r)
+    os.kill(supervisor, signal.SIGKILL)
+    os.waitpid(supervisor, 0)
+    for _ in range(50):
+        if _process_gone(grandchild):
+            break
+        time.sleep(0.05)
+    assert _process_gone(grandchild)
+
+
+@pytest.mark.parametrize("where", ["prepare", "evaluate"])
+@pytest.mark.parametrize("isolated", [True, False])
+def test_unexpected_engine_exceptions_are_500_without_details(client, monkeypatch, where, isolated):
+    def boom(*args, **kwargs):
+        raise TypeError("secret internal detail")
+
+    if where == "prepare":
+        monkeypatch.setattr(app_module, "prepareQuery", boom)
+    else:
+        monkeypatch.setattr(rdflib.Graph, "query", boom)
+    if not isolated:
+        monkeypatch.setattr(app_module, "_sparql_isolation_available", lambda: False)
+        monkeypatch.setattr(settings, "SPARQL_ALLOW_UNISOLATED", True)
+    r = client.get("/sparql", params={"query": SIMPLE_QUERY})
+    assert r.status_code == 500
+    assert "secret" not in r.text
+
+
+@pytest.mark.parametrize(
+    "query,fragment",
+    [
+        ("SELEC * WHERE {}", "SPARQL query error"),
+        ("SELECT * WHERE { foo:x ?p ?o }", "prefix"),
+        ('SELECT * WHERE { BIND(REGEX("a", "[") AS ?x) }', "SPARQL query error"),
+        ('SELECT * WHERE { BIND(STRLANG("a", 5) AS ?x) }', "SPARQL query error"),
+        ("SELECT * WHERE { ?s ?p ?o } LIMIT 99999999999999999999999", "SPARQL query error"),
+        ("SELECT * WHERE " + "{" * 3000 + "}" * 3000, "nested too deeply"),
+    ],
+)
+def test_mistakes_in_queries_are_400(client, query, fragment):
+    r = client.post("/sparql", content=query, headers={"Content-Type": "application/sparql-query"})
+    assert r.status_code == 400, r.text
+    assert fragment.lower() in r.json()["detail"].lower()
+
+
+def test_child_never_returns_into_server_code(client, monkeypatch):
+    """If the child's main function raises instead of exiting, the child must still exit."""
+    monkeypatch.setattr(settings, "SPARQL_TIMEOUT_SECONDS", 5.0)
+
+    def raising_child(write_fd, query, accept, parent_pid):
+        raise TypeError("child escaped")
+
+    monkeypatch.setattr(app_module, "_sparql_child_main", raising_child)
+    t0 = time.monotonic()
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 500
+    assert time.monotonic() - t0 < 2  # an escaped child would hang until the deadline
+    assert _no_children_left()
+
+
+def test_isolated_execution_preserves_every_value_string_exactly(client):
+    """Every codata:value / codata:uncertainty literal comes back byte-for-byte, with its datatype."""
+    g = app_module._require_graph()
+    model = "https://w3id.org/codata/model/"
+    expected = {}
+    for prop in ("value", "uncertainty"):
+        for s, o in g.subject_objects(rdflib.URIRef(model + prop)):
+            expected[(str(s), prop)] = (str(o), str(o.datatype) if o.datatype else None)
+    assert len(expected) > 2000
+
+    q = (
+        f"SELECT ?cv ?p ?v WHERE {{ VALUES ?p {{ <{model}value> <{model}uncertainty> }} ?cv ?p ?v }}"
+    )
+    r = client.get("/sparql", params={"query": q}, headers={"Accept": "application/sparql-results+json"})
+    assert r.status_code == 200
+    got = {}
+    for b in r.json()["results"]["bindings"]:
+        got[(b["cv"]["value"], b["p"]["value"].rsplit("/", 1)[-1])] = (
+            b["v"]["value"],
+            b["v"].get("datatype"),
+        )
+    assert got == expected
+
+
+# --- v4: deadline policy, stuck processes, bounded diagnostics ---
+
+
+@pytest.mark.parametrize(
+    "after_report,status,fragment",
+    [
+        ("exit3", 500, "server error"),  # reported success, then exited abnormally
+        ("sigkill", 500, "server error"),  # reported success, then died from a signal we did not send
+    ],
+)
+def test_result_is_used_only_if_child_exits_cleanly(client, monkeypatch, after_report, status, fragment):
+    def child(write_fd, query, accept, parent_pid):
+        os.write(write_fd, b'{"kind": "ok", "media_type": "text/plain", "length": 2}\nok')
+        os.close(write_fd)
+        if after_report == "exit3":
+            os._exit(3)
+        os.kill(os.getpid(), signal.SIGKILL)
+
+    monkeypatch.setattr(app_module, "_sparql_child_main", child)
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == status and fragment in r.json()["detail"]
+    assert _no_children_left()
+
+
+def test_queries_refused_while_a_process_could_not_be_reaped(client):
+    stuck = os.fork()
+    if stuck == 0:
+        try:
+            time.sleep(60)
+        finally:
+            os._exit(0)
+    app_module._UNREAPED.add(stuck)  # as _finish_child does when SIGKILL did not take effect
+    r = client.get("/sparql", params={"query": SIMPLE_QUERY})
+    assert r.status_code == 503 and "temporarily refused" in r.json()["detail"]
+    os.kill(stuck, signal.SIGKILL)
+    time.sleep(0.2)
+    r = client.get("/sparql", params={"query": SIMPLE_QUERY})  # reaped at the start of this query
+    assert r.status_code == 200
+    assert not app_module._UNREAPED
+    assert _no_children_left()
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    ["p" * 100, "p" * 5000, "p" * 50_000, "é" * 3000, "a" + "é中" * 3000],
+    ids=["short", "5k", "50k", "escaped-6x", "mixed-escaped"],
+)
+def test_long_query_error_messages_stay_400(client, prefix):
+    """Error messages quote the query; they must fit the IPC header and stay client errors."""
+    r = client.post(
+        "/sparql",
+        content=f"SELECT * WHERE {{ {prefix}:x ?p ?o }}".encode(),
+        headers={"Content-Type": "application/sparql-query"},
+    )
+    assert r.status_code == 400, r.text[:200]
+    detail = r.json()["detail"]
+    assert "prefix" in detail.lower()
+    assert len(detail.encode()) < app_module._HEADER_MAX_BYTES
+
+
+def test_encoded_header_is_always_bounded():
+    for message in ["x" * 10**6, "é" * 10**5, "\U0001f600" * 10**5, '"\\' * 10**5]:
+        encoded = app_module._encode_header({"kind": "query_error", "message": message})
+        assert len(encoded) < app_module._HEADER_MAX_BYTES
+        assert json.loads(encoded)["kind"] == "query_error"
+
+
+def test_parent_death_signal_is_the_first_setup_step(monkeypatch):
+    """The orphan protection is installed before any other post-fork work."""
+    calls = []
+    monkeypatch.setattr(app_module, "_set_parent_death_signal", lambda pid: calls.append("pdeathsig"))
+    monkeypatch.setattr(app_module.gc, "freeze", lambda: calls.append("freeze"))
+    monkeypatch.setattr(app_module, "_close_inherited_fds", lambda keep: calls.append("fds"))
+    monkeypatch.setattr(app_module, "_limit_child_memory", lambda mb: calls.append("rlimit"))
+    monkeypatch.setattr(app_module, "_execute_and_serialize", lambda q, a: (b"", "text/plain"))
+    monkeypatch.setattr(app_module, "_write_result", lambda fd, h, b=b"": None)
+    monkeypatch.setattr(app_module.os, "_exit", lambda code: (_ for _ in ()).throw(SystemExit(code)))
+    with pytest.raises(SystemExit):
+        app_module._sparql_child_main(-1, "ASK {}", "", os.getppid())
+    assert calls == ["pdeathsig", "freeze", "fds", "rlimit"]
+
+
+# --- v5: exact enforcement of the strict exit policy ---
+
+
+def _reporting_child(write_fd, query, accept, parent_pid):
+    os.write(write_fd, b'{"kind": "ok", "media_type": "text/plain", "length": 2}\nok')
+    os.close(write_fd)
+    os._exit(0)
+
+
+def test_forced_cleanup_means_timeout_even_with_a_clean_exit_status(client, monkeypatch):
+    """The child exits normally just after the deadline, before SIGKILL lands: still a timeout."""
+    real_finish = app_module._finish_child
+
+    def late_but_clean(pid, deadline, kill):
+        status, _ = real_finish(pid, deadline, kill)  # really reap it (status 0)
+        assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+        return status, True  # ...but forced cleanup had been started
+
+    monkeypatch.setattr(app_module, "_sparql_child_main", _reporting_child)
+    monkeypatch.setattr(app_module, "_finish_child", late_but_clean)
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 503 and "time limit" in r.json()["detail"]
+    assert _no_children_left()
+
+
+def test_unknown_exit_status_is_not_a_clean_exit(client, monkeypatch):
+    """If the child was reaped elsewhere (ChildProcessError), its result is not used."""
+    real_waitpid = os.waitpid
+
+    def reaped_elsewhere(pid, options):
+        real_waitpid(pid, 0)  # somebody else reaps it...
+        raise ChildProcessError(10, "No child processes")  # ...so we cannot
+
+    monkeypatch.setattr(app_module, "_sparql_child_main", _reporting_child)
+    monkeypatch.setattr(app_module.os, "waitpid", reaped_elsewhere)
+    r = client.get("/sparql", params={"query": "ASK {}"})
+    assert r.status_code == 500
+    assert _no_children_left()
+
+
+def test_wait_child_reports_unknown_status_for_a_process_that_is_not_ours():
+    assert app_module._wait_child(1, time.monotonic()) == app_module._STATUS_UNKNOWN
