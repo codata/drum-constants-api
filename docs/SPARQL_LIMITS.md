@@ -14,7 +14,16 @@ invalid values stop the service at startup.
 | `SPARQL_MAX_WAIT_SECONDS` | 2 | How long a waiting query may wait before it gets 503. |
 | `SPARQL_MAX_RESULT_ROWS` | 100 000 | Rows (SELECT) or triples (CONSTRUCT/DESCRIBE) in a result; more gives 400. The full graph (~60 000 triples) fits. |
 | `SPARQL_MAX_RESPONSE_BYTES` | 32 MiB | Size of the serialized result, checked in the child and again, exactly, by the worker while it reads; more gives 400. The largest full-dataset response today is about 17 MB (`SELECT *` as SPARQL XML; N-Triples 9.4 MB, Turtle 2.8 MB). |
+| `SPARQL_MAX_REQUEST_BYTES` | 1 MiB | POST body size, enforced while reading (also for chunked bodies); more gives 413. |
+| `SPARQL_MAX_QUERY_LENGTH` | 100 000 | Characters in a query; more gives 413 (POST) or 414 (GET). |
 | `SPARQL_ALLOW_UNISOLATED` | false | Query isolation needs Linux. Elsewhere `/sparql` answers 503 unless this is set; with it, queries run in-process **without time or memory limits**: local development only. |
+
+Malformed input (body not valid UTF-8, malformed form or JSON, a "%" not
+followed by two hex digits or percent-escapes that are not valid UTF-8 in a form
+body or GET query string, a JSON `query` that is not a string, an empty or
+whitespace-only query, more than one `query` parameter) gives 400 before any
+query process is started. GET query strings are parsed with the same strict
+rules as form bodies, so a query is never silently altered by decoding.
 
 Client queries are never cached; the result cache (`SPARQL_CACHE_*`) only holds
 the server's own per-resource queries.
@@ -70,8 +79,10 @@ limit with margin.
 These belong to the deployment:
 
 - **Rate limiting** per client at the reverse proxy.
-- **Request size**: keep the proxy's body limit (nginx `client_max_body_size`,
-  default 1 MB) in place; the application itself does not limit request bodies.
+- **Request reception**: connection limits and request/body read timeouts at
+  the proxy. Bodies are received and parsed before admission control, so the
+  query slots do not limit concurrent or slow uploads. Keep the proxy's body
+  limit (nginx `client_max_body_size`, default 1 MB) as well.
 - **Network access**: query processes need no outbound network access.
   `SERVICE` is refused and remote graph loading is disabled in the
   application, but a network policy that blocks egress is the robust guarantee.

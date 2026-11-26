@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Run queries in-process, without time or memory limits, where query
     # isolation is unavailable (anything but Linux). Local development only.
     SPARQL_ALLOW_UNISOLATED: bool = False
+    # Input limits, checked before a query is parsed or executed.
+    SPARQL_MAX_REQUEST_BYTES: int = Field(1024 * 1024, ge=1024)
+    SPARQL_MAX_QUERY_LENGTH: int = Field(100_000, ge=100)
 
     # Subpath hosting behind a reverse proxy (see docs/SUBPATH_HOSTING.md).
     # TRUST_X_FORWARDED_PREFIX=False ignores the header; use that with a fixed

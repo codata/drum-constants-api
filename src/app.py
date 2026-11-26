@@ -2158,58 +2158,131 @@ async def unit(id: str, request: Request):
         raise HTTPException(status_code=400, detail=f"SPARQL query error: {e.message}")
 
 
+def _check_query_text(query: Any, too_long_status: int) -> str:
+    """Validate a client query string before any work is done on it."""
+    if not isinstance(query, str) or not query.strip():
+        raise HTTPException(status_code=400, detail="Missing 'query' parameter")
+    try:
+        query.encode("utf-8")  # e.g. a lone surrogate from a JSON "\ud800" escape
+    except UnicodeEncodeError:
+        raise HTTPException(status_code=400, detail="SPARQL query is not valid Unicode text")
+    limit = settings.SPARQL_MAX_QUERY_LENGTH
+    if len(query) > limit:
+        raise HTTPException(
+            status_code=too_long_status, detail=f"SPARQL query is longer than the limit of {limit} characters"
+        )
+    return query
+
+
+_MALFORMED_PERCENT_ESCAPE = re.compile(r"%(?![0-9A-Fa-f]{2})")
+
+
+def _parse_urlencoded_strict(text: str, what: str) -> dict[str, list[str]]:
+    """Parse application/x-www-form-urlencoded data (form body or URL query string)
+    strictly: a "%" not followed by two hex digits, or percent-escapes that do not
+    decode as UTF-8, give 400 instead of being kept literally or replaced by U+FFFD."""
+    if _MALFORMED_PERCENT_ESCAPE.search(text):
+        raise HTTPException(status_code=400, detail=f"Malformed {what} (invalid percent-escape)")
+    try:
+        return urllib.parse.parse_qs(text, keep_blank_values=True, errors="strict", max_num_fields=100)
+    except (UnicodeDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"Malformed {what}")
+
+
+class _DuplicateQueryKey(Exception):
+    pass
+
+
+def _json_object_rejecting_duplicate_query(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    if [k for k, _ in pairs].count("query") > 1:
+        raise _DuplicateQueryKey()
+    return dict(pairs)
+
+
+async def _read_body_limited(request: Request) -> bytes:
+    """Read the request body, refusing it (413) as soon as it exceeds SPARQL_MAX_REQUEST_BYTES."""
+    limit = settings.SPARQL_MAX_REQUEST_BYTES
+    too_large = HTTPException(status_code=413, detail=f"Request body is larger than the limit of {limit} bytes")
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > limit:
+        raise too_large
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():  # also covers chunked bodies without Content-Length
+        size += len(chunk)
+        if size > limit:
+            raise too_large
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _decode_utf8(body: bytes) -> str:
+    try:
+        return body.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="Request body is not valid UTF-8")
+
+
 @app.get("/sparql")
 async def sparql_get(request: Request, query: Optional[str] = None):
     """Execute a SPARQL query via GET request (SPARQL 1.1 Protocol §2.1.1),
     or render the interactive SPARQL Console when opened in a web browser without a query.
     """
     accept = _resolve_accept(request)
-    if not query:
+    if query is None:
         if "text/html" in accept or "application/xhtml+xml" in accept:
             return templates.TemplateResponse(request, "sparql.html", {})
         raise HTTPException(status_code=400, detail="Missing 'query' parameter")
-
+    # Re-parse the raw query string with the same strict rules as form bodies;
+    # the framework's decoding would keep malformed escapes and replace invalid
+    # UTF-8 with U+FFFD, silently changing string literals in the query.
+    try:
+        raw = request.scope.get("query_string", b"").decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="Malformed query string")
+    values = _parse_urlencoded_strict(raw, "query string").get("query", [])
+    if len(values) > 1:
+        raise HTTPException(status_code=400, detail="More than one 'query' parameter")
+    query = _check_query_text(values[0] if values else None, too_long_status=414)
     return await execute_public_sparql(query, accept)
 
 
 @app.post("/sparql")
 async def sparql_post(request: Request):
-    """Execute a SPARQL query via POST request (SPARQL 1.1 Protocol §2.1.2 and §2.1.3)."""
-    content_type = request.headers.get("content-type", "")
+    """Execute a SPARQL query via POST request (SPARQL 1.1 Protocol §2.1.2 and §2.1.3).
 
-    if "application/x-www-form-urlencoded" in content_type:
-        try:
-            form_data = await request.form()
-            query = str(form_data.get("query") or "")
-        except (AssertionError, Exception):
-            body = await request.body()
-            params = urllib.parse.parse_qs(body.decode("utf-8"))
-            query_vals = params.get("query")
-            query = query_vals[0] if query_vals else ""
-        if not query:
-            raise HTTPException(status_code=400, detail="Missing 'query' parameter")
-    elif "application/sparql-query" in content_type:
-        body = await request.body()
-        query = body.decode("utf-8")
-        if not query:
-            raise HTTPException(status_code=400, detail="Empty query body")
-    elif "application/json" in content_type:
-        try:
-            json_body = await request.json()
-            query = json_body.get("query")
-            if not query:
-                raise HTTPException(status_code=400, detail="Missing 'query' field in JSON body")
-        except HTTPException:
-            raise
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON body")
-    else:
+    The body is read with a size limit and decoded as UTF-8 before anything else;
+    malformed input gives 400, oversized input 413.
+    """
+    media_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if media_type not in ("application/x-www-form-urlencoded", "application/sparql-query", "application/json"):
         raise HTTPException(
             status_code=415,
             detail="Unsupported Media Type. Use application/x-www-form-urlencoded, "
             "application/sparql-query, or application/json",
         )
 
+    text = _decode_utf8(await _read_body_limited(request))
+
+    if media_type == "application/x-www-form-urlencoded":
+        values = _parse_urlencoded_strict(text, "form body").get("query", [])
+        if len(values) > 1:
+            raise HTTPException(status_code=400, detail="More than one 'query' parameter")
+        query: Any = values[0] if values else None
+    elif media_type == "application/sparql-query":
+        query = text
+    else:
+        try:
+            json_body = json.loads(text, object_pairs_hook=_json_object_rejecting_duplicate_query)
+        except _DuplicateQueryKey:
+            raise HTTPException(status_code=400, detail="More than one 'query' field in JSON body")
+        except (ValueError, RecursionError):  # RecursionError: deeply nested JSON
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+        if not isinstance(json_body, dict):
+            raise HTTPException(status_code=400, detail="JSON body must be an object with a 'query' string")
+        query = json_body.get("query")
+
+    query = _check_query_text(query, too_long_status=413)
     accept = _resolve_accept(request)
     return await execute_public_sparql(query, accept)
 

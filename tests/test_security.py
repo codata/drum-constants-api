@@ -135,6 +135,7 @@ def test_resource_queries_still_use_the_bounded_cache(client):
 # ---------------------------------------------------------------------------
 
 import errno
+import urllib.parse
 import json
 import os
 import signal
@@ -1109,3 +1110,184 @@ def test_redirect_when_server_includes_root_path_in_path():
     """uvicorn --root-path puts the prefix into scope["path"] as well; do not double it."""
     status, headers = _raw_asgi_get("/drum/constants/constants/", root_path="/drum/constants")
     assert status == 307 and headers["location"] == "/drum/constants/constants"
+# ---------------------------------------------------------------------------
+# Patch 5: input limits and validation on /sparql
+# ---------------------------------------------------------------------------
+
+FORM = "application/x-www-form-urlencoded"
+RAW = "application/sparql-query"
+JSON_CT = "application/json"
+
+
+def _post(client, content_type, content):
+    return client.post("/sparql", content=content, headers={"Content-Type": content_type})
+
+
+def test_body_over_limit_is_413(client, monkeypatch):
+    monkeypatch.setattr(settings, "SPARQL_MAX_REQUEST_BYTES", 2048)
+    r = _post(client, RAW, b" " * 4000 + b"ASK {}")
+    assert r.status_code == 413
+
+
+def test_chunked_body_over_limit_is_413(client, monkeypatch):
+    monkeypatch.setattr(settings, "SPARQL_MAX_REQUEST_BYTES", 2048)
+
+    def chunks():
+        for _ in range(10):
+            yield b" " * 1000
+
+    r = client.post("/sparql", content=chunks(), headers={"Content-Type": RAW})
+    assert r.status_code == 413
+
+
+def test_query_length_limits(client, monkeypatch):
+    monkeypatch.setattr(settings, "SPARQL_MAX_QUERY_LENGTH", 200)
+    long_query = "ASK {}" + " " * 300
+    assert client.get("/sparql", params={"query": long_query}).status_code == 414
+    assert _post(client, RAW, long_query.encode()).status_code == 413
+    assert _post(client, JSON_CT, json.dumps({"query": long_query})).status_code == 413
+    assert client.get("/sparql", params={"query": "ASK {}"}).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "content_type,content",
+    [
+        (RAW, b"ASK { ?s ?p \xff\xfe }"),
+        (FORM, b"query=ASK%20%7B%7D%FF"),
+        (FORM, b"query=ASK \xff"),
+        (JSON_CT, b'{"query": "ASK {} \xff"}'),
+    ],
+)
+def test_invalid_utf8_is_400(client, content_type, content):
+    r = _post(client, content_type, content)
+    assert r.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "content_type,content",
+    [
+        (JSON_CT, '{"query": 5}'),
+        (JSON_CT, '{"query": ["ASK {}"]}'),
+        (JSON_CT, '{"query": null}'),
+        (JSON_CT, "{}"),
+        (JSON_CT, '["ASK {}"]'),
+        (JSON_CT, '"ASK {}"'),
+        (JSON_CT, "not json"),
+        (JSON_CT, '{"query": "   "}'),
+        (RAW, ""),
+        (RAW, " \n\t "),
+        (FORM, ""),
+        (FORM, "query="),
+        (FORM, "query=%20%20"),
+        (FORM, "other=1"),
+        (FORM, "query=ASK%20%7B%7D&query=ASK%20%7B%7D"),
+    ],
+)
+def test_malformed_query_input_is_400(client, content_type, content):
+    r = _post(client, content_type, content)
+    assert r.status_code == 400, r.text
+
+
+def test_whitespace_only_get_query_is_400(client):
+    assert client.get("/sparql", params={"query": "   "}).status_code == 400
+
+
+def test_unsupported_media_type_is_415(client):
+    assert _post(client, "text/plain", "ASK {}").status_code == 415
+
+
+@pytest.mark.parametrize(
+    "content_type,content",
+    [
+        (RAW, SIMPLE_QUERY),
+        (f"{RAW}; charset=utf-8", SIMPLE_QUERY),
+        (FORM, urllib.parse.urlencode({"query": SIMPLE_QUERY})),
+        (JSON_CT, json.dumps({"query": SIMPLE_QUERY})),
+    ],
+)
+def test_post_encodings_give_the_same_result_as_get(client, content_type, content):
+    expected = client.get("/sparql", params={"query": SIMPLE_QUERY}).json()
+    r = _post(client, content_type, content)
+    assert r.status_code == 200
+    assert r.json() == expected
+
+
+@pytest.mark.parametrize("name,value", [("SPARQL_MAX_REQUEST_BYTES", 10), ("SPARQL_MAX_QUERY_LENGTH", 5)])
+def test_invalid_input_limit_settings_are_rejected(name, value):
+    from pydantic import ValidationError
+
+    from src.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(**{name: value})
+
+
+# --- v3: remaining input-validation edge cases ---
+
+
+def test_deeply_nested_json_is_400(client):
+    body = '{"query": ' + "[" * 100_000 + "]" * 100_000 + "}"  # 200 kB, well under the body limit
+    assert _post(client, JSON_CT, body).status_code == 400
+
+
+@pytest.mark.parametrize("escape", ["\\ud800", "\\udfff", "\\ud800x"])
+def test_lone_surrogate_in_json_query_is_400(client, escape):
+    r = _post(client, JSON_CT, '{"query": "ASK {} # ' + escape + '"}')
+    assert r.status_code == 400 and "unicode" in r.json()["detail"].lower()
+
+
+def test_valid_surrogate_pair_in_json_query_is_accepted(client):
+    r = _post(client, JSON_CT, '{"query": "ASK {} # \\ud83d\\ude00"}')  # U+1F600 as an escaped pair
+    assert r.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "query=ASK%20%7B%7D&query=",  # second, blank query parameter
+        "query=&query=ASK%20%7B%7D",
+        "query=ASK%zz%7B%7D",  # malformed percent-escape
+        "query=ASK%2",
+        "query=ASK%",
+    ],
+)
+def test_form_duplicates_and_malformed_escapes_are_400(client, content):
+    assert _post(client, FORM, content).status_code == 400
+
+
+def test_duplicate_query_parameters_are_400_in_every_encoding(client):
+    assert client.get("/sparql?query=ASK%20%7B%7D&query=ASK%20%7B%7D").status_code == 400
+    assert client.get("/sparql?query=ASK%20%7B%7D&query=").status_code == 400
+    assert _post(client, JSON_CT, '{"query": "ASK {}", "query": "ASK {}"}').status_code == 400
+    assert _post(client, FORM, "query=ASK%20%7B%7D&query=ASK%20%7B%7D").status_code == 400
+    # a nested object may still use the key "query"
+    assert _post(client, JSON_CT, '{"query": "ASK {}", "meta": {"query": 1}}').status_code == 200
+
+
+# --- v4: GET query strings are parsed as strictly as form bodies ---
+
+
+@pytest.mark.parametrize(
+    "qs",
+    [
+        "query=SELECT%20(STRLEN(%22%FF%22)%20AS%20%3Fn)%20WHERE%20%7B%7D",  # invalid UTF-8 escape
+        "query=ASK%20%7B%7D%20%23%C3",  # truncated UTF-8 sequence
+        "query=SELECT%20(STR(%22a%zzb%22)%20AS%20%3Fn)%20WHERE%20%7B%7D",  # malformed escape
+        "query=ASK%20%7B%7D%2",
+        "query=ASK%20%7B%7D&format=json%",
+    ],
+)
+def test_get_query_string_is_parsed_strictly(client, qs):
+    r = client.get(f"/sparql?{qs}")
+    assert r.status_code == 400, r.text
+
+
+def test_get_with_valid_utf8_escapes_still_works(client):
+    r = client.get("/sparql?query=SELECT%20(STRLEN(%22%C3%A9%F0%9F%98%80%22)%20AS%20%3Fn)%20WHERE%20%7B%7D")
+    assert r.status_code == 200
+    assert r.json()["results"]["bindings"][0]["n"]["value"] == "2"
+
+
+def test_get_plus_means_space_as_before(client):
+    r = client.get("/sparql?query=SELECT+(STRLEN(%22a+b%22)+AS+%3Fn)+WHERE+%7B%7D")
+    assert r.json()["results"]["bindings"][0]["n"]["value"] == "3"
