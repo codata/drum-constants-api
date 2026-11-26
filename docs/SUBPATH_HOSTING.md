@@ -169,3 +169,20 @@ With subpath support, you can now:
 **Testing:** Manual testing recommended before production deployment
 
 **Compatibility:** Works with all major reverse proxies (Nginx, Apache, Traefik, etc.)
+
+## Security of the prefix
+
+The prefix ends up in redirect `Location` headers and in every link on the HTML
+pages, so it must not be controllable by clients.
+
+- **Fixed prefix (preferred):** set `ROOT_PATH` (or `uvicorn --root-path`) and
+  `TRUST_X_FORWARDED_PREFIX=false`.
+- **Prefix from the proxy:** the proxy must *set* (overwrite) `X-Forwarded-Prefix`
+  on every request, as in the nginx (`proxy_set_header`) and Apache
+  (`RequestHeader set`) examples above, and should list the expected value(s) in
+  `FORWARDED_PREFIX_ALLOWED`, e.g. `FORWARDED_PREFIX_ALLOWED='["/drum/constants"]'`.
+- In both cases the backend port should be reachable only from the proxy.
+
+The application accepts only a plain absolute path (`/a/b`, letters, digits and
+`-._~`, at most one trailing slash) and ignores anything else, with a
+rate-limited warning in the log.

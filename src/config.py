@@ -1,4 +1,6 @@
-from pydantic import Field
+import re
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 from pathlib import Path
@@ -29,6 +31,25 @@ class Settings(BaseSettings):
     # Run queries in-process, without time or memory limits, where query
     # isolation is unavailable (anything but Linux). Local development only.
     SPARQL_ALLOW_UNISOLATED: bool = False
+
+    # Subpath hosting behind a reverse proxy (see docs/SUBPATH_HOSTING.md).
+    # TRUST_X_FORWARDED_PREFIX=False ignores the header; use that with a fixed
+    # ROOT_PATH. When it is used, the proxy must *set* (overwrite) the header,
+    # and FORWARDED_PREFIX_ALLOWED should list the expected prefix(es), e.g.
+    # ["/drum/constants"]; empty accepts any well-formed absolute path.
+    TRUST_X_FORWARDED_PREFIX: bool = True
+    FORWARDED_PREFIX_ALLOWED: List[str] = []
+
+    @field_validator("FORWARDED_PREFIX_ALLOWED")
+    @classmethod
+    def _check_prefixes(cls, values: List[str]) -> List[str]:
+        cleaned = []
+        for v in values:
+            v = v[:-1] if v.endswith("/") else v
+            if not re.fullmatch(r"(/[A-Za-z0-9._~-]+)+", v) or "/./" in v + "/" or "/../" in v + "/":
+                raise ValueError(f"not a plain absolute path: {v!r}")
+            cleaned.append(v)
+        return cleaned
 
     model_config = SettingsConfigDict(env_file=".env")
 

@@ -893,3 +893,219 @@ def test_unknown_exit_status_is_not_a_clean_exit(client, monkeypatch):
 
 def test_wait_child_reports_unknown_status_for_a_process_that_is_not_ours():
     assert app_module._wait_child(1, time.monotonic()) == app_module._STATUS_UNKNOWN
+# ---------------------------------------------------------------------------
+# Patch 4: X-Forwarded-Prefix and redirects
+# ---------------------------------------------------------------------------
+
+from urllib.parse import urljoin, urlsplit
+
+ORIGIN = "https://api.example.org"
+
+
+def _redirect_target(response, request_url: str) -> str:
+    """Resolve Location like a browser and return the absolute URL.
+
+    urljoin() alone is not enough: browsers (WHATWG URL) also treat "%2e" as "."
+    when removing dot segments, so those are decoded before resolving.
+    """
+    import re as _re
+
+    assert response.status_code == 307
+    location = _re.sub(r"%2e", ".", response.headers["location"], flags=_re.IGNORECASE)
+    return urljoin(request_url, location)
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "//evil.example",
+        "https://evil.example",
+        "/a//b",
+        "/a/../b",
+        "/a/./b",
+        "/a b",
+        '/x"><script>',
+        "evil",
+        "/a\\b",
+        "\\\\evil.example",
+        "/a%2Fb",
+        "/a//",
+        "/",
+        "",
+    ],
+)
+def test_malformed_forwarded_prefix_is_ignored(client, prefix):
+    r = client.get("/constants/", headers={"X-Forwarded-Prefix": prefix}, follow_redirects=False)
+    assert r.headers["location"] == "/constants"
+
+    html = client.get("/constants", headers={"X-Forwarded-Prefix": prefix, "Accept": "text/html"})
+    assert html.status_code == 200
+    assert "evil.example" not in html.text
+    assert '"><script>' not in html.text
+    assert 'href="//' not in html.text
+
+
+@pytest.mark.parametrize("prefix", ["/drum/constants", "/drum/constants/", "/drum-api", "/a.b~c_d"])
+def test_wellformed_forwarded_prefix_still_works(client, prefix):
+    r = client.get("/constants/?q=planck", headers={"X-Forwarded-Prefix": prefix}, follow_redirects=False)
+    assert r.headers["location"] == prefix.rstrip("/") + "/constants?q=planck"
+
+
+def test_forwarded_prefix_allowlist(client, monkeypatch):
+    monkeypatch.setattr(settings, "FORWARDED_PREFIX_ALLOWED", ["/drum/constants"])
+    ok = client.get("/constants/", headers={"X-Forwarded-Prefix": "/drum/constants"}, follow_redirects=False)
+    assert ok.headers["location"] == "/drum/constants/constants"
+    other = client.get("/constants/", headers={"X-Forwarded-Prefix": "/other"}, follow_redirects=False)
+    assert other.headers["location"] == "/constants"
+
+
+def test_forwarded_prefix_can_be_switched_off(client, monkeypatch):
+    monkeypatch.setattr(settings, "TRUST_X_FORWARDED_PREFIX", False)
+    r = client.get("/constants/", headers={"X-Forwarded-Prefix": "/drum/constants"}, follow_redirects=False)
+    assert r.headers["location"] == "/constants"
+
+
+def test_configured_root_path_is_kept_without_header():
+    with TestClient(app, root_path="/drum/constants") as c:
+        r = c.get("/constants/", follow_redirects=False)
+        assert r.headers["location"] == "/drum/constants/constants"
+
+
+@pytest.mark.parametrize("value", ["//evil", "/a/../b", "relative", "/a b"])
+def test_invalid_allowlist_entries_are_rejected(value):
+    from pydantic import ValidationError
+
+    from src.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(FORWARDED_PREFIX_ALLOWED=[value])
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "//evil.example/",
+        "///evil.example/",
+        "//evil.example/x/",
+        "/%5Cevil.example/",
+        "/%5C%5Cevil.example/",
+        "/%5C/evil.example/",
+        "/%2F%2Fevil.example/",
+        "/constants//",
+    ],
+)
+def test_trailing_slash_redirect_stays_on_origin(client, path):
+    # Pass a full URL: a bare "//host/" would be read by the test client as a host.
+    r = client.get(f"http://testserver{path}", follow_redirects=False)
+    target = urlsplit(_redirect_target(r, f"{ORIGIN}{path}"))
+    assert (target.scheme, target.netloc) == ("https", "api.example.org")
+    assert not r.headers["location"].startswith("//")
+    assert "\\" not in r.headers["location"]
+
+
+def test_bad_prefix_warning_is_rate_limited(client, caplog):
+    import logging
+
+    app_module._warn_bad_prefix._last = float("-inf")
+    with caplog.at_level(logging.WARNING, logger="src.app"):
+        for _ in range(20):
+            client.get("/health", headers={"X-Forwarded-Prefix": "//evil.example"})
+    assert len([r for r in caplog.records if "X-Forwarded-Prefix" in r.getMessage()]) == 1
+
+
+def _raw_asgi_get(path: str, root_path: str = "", host: bytes = b"testserver") -> tuple[int, dict]:
+    """Send a GET with an unnormalised path straight to the ASGI app (HTTP clients
+    and browsers remove dot segments before sending, a raw client need not)."""
+    import asyncio
+
+    scope = {
+        "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "GET",
+        "scheme": "http", "path": path, "raw_path": path.encode(), "root_path": root_path,
+        "query_string": b"", "headers": [(b"host", host)],
+        "client": ("127.0.0.1", 1234), "server": ("testserver", 80),
+    }
+    sent: list = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    asyncio.run(app(scope, receive, send))
+    start = next(m for m in sent if m["type"] == "http.response.start")
+    return start["status"], {k.decode(): v.decode() for k, v in start["headers"]}
+
+
+@pytest.mark.parametrize("path", ["/a/../", "/../../evil/", "/constants/./", "/./", "/x/../../", "/units/."])
+def test_paths_with_dot_segments_are_not_redirected(path):
+    for root in ("", "/drum/constants"):
+        status, headers = _raw_asgi_get(path, root, host=b"evil.example")
+        assert status == 404, (path, root, headers.get("location"))
+
+
+@pytest.mark.parametrize("path", ["/constants/", "//x/", "/units/abc/"])
+def test_no_redirect_uses_the_host_header(path):
+    status, headers = _raw_asgi_get(path, host=b"evil.example")
+    assert status == 307
+    assert "evil.example" not in headers["location"]
+
+
+@pytest.mark.parametrize("path", ["/constants/", "//x/", "/units/abc/", "/%5Cevil/"])
+def test_redirects_stay_inside_the_root_path(path):
+    with TestClient(app, root_path="/drum/constants") as c:
+        r = c.get(f"http://testserver{path}", follow_redirects=False)
+        target = urlsplit(_redirect_target(r, f"{ORIGIN}/drum/constants{path}"))
+        assert target.netloc == "api.example.org"
+        assert target.path.startswith("/drum/constants/")
+
+
+def test_slashes_only_path_redirects_to_root_without_loop():
+    with TestClient(app, root_path="/drum/constants") as c:
+        r = c.get("http://testserver///", follow_redirects=False)
+        assert r.status_code == 307 and r.headers["location"] == "/drum/constants/"
+        # A proxy that strips the prefix forwards that as "/", which is served directly.
+        assert c.get("/", follow_redirects=False).status_code == 200
+    r = TestClient(app).get("http://testserver///", follow_redirects=False)
+    assert r.headers["location"] == "/"
+
+
+# --- v4: decoded path vs encoded URL in redirects ---
+
+
+@pytest.mark.parametrize(
+    "raw_decoded_path,expected_location",
+    [
+        # request path as received   ->  decoded ASGI path (what the middleware sees)
+        ("/%2e%2e/", "/drum/constants/%252e%252e"),  # from /%252e%252e/
+        ("/%2E%2e/x/", "/drum/constants/%252E%252e/x"),
+        ("/a?b/", "/drum/constants/a%3Fb"),  # from /a%3Fb/: "?" must stay path data
+        ("/a#b/", "/drum/constants/a%23b"),  # from /a%23b/
+        ("/a%25/", "/drum/constants/a%2525"),  # from /a%2525/: no second decoding
+        ("/a%3F/", "/drum/constants/a%253F"),  # from /a%253F/
+        ("/café/", "/drum/constants/caf%C3%A9"),
+        ("/a b/", "/drum/constants/a%20b"),
+    ],
+)
+def test_redirect_reencodes_the_decoded_path(raw_decoded_path, expected_location):
+    status, headers = _raw_asgi_get(raw_decoded_path, root_path="/drum/constants")
+    assert status == 307
+    location = headers["location"]
+    assert location == expected_location
+    target = urlsplit(
+        _redirect_target(type("R", (), {"status_code": 307, "headers": headers})(), f"{ORIGIN}/drum/constants/x/")
+    )
+    assert target.netloc == "api.example.org" and target.path.startswith("/drum/constants/")
+    assert target.query == "" and target.fragment == ""
+
+
+def test_query_string_is_kept_verbatim_on_redirect():
+    with TestClient(app, root_path="/drum/constants") as c:
+        r = c.get("/constants/?q=a%20b&x=%2e%2e", follow_redirects=False)
+        assert r.headers["location"] == "/drum/constants/constants?q=a%20b&x=%2e%2e"
+
+
+def test_redirect_when_server_includes_root_path_in_path():
+    """uvicorn --root-path puts the prefix into scope["path"] as well; do not double it."""
+    status, headers = _raw_asgi_get("/drum/constants/constants/", root_path="/drum/constants")
+    assert status == 307 and headers["location"] == "/drum/constants/constants"

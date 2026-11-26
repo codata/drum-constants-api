@@ -236,6 +236,9 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
     root_path=ROOT_PATH,
+    # Trailing slashes are handled by handle_trailing_slashes(). Starlette's own
+    # redirect_slashes builds an absolute URL from the Host header; keep it off.
+    redirect_slashes=False,
 )
 
 # CORS middleware for frontend access
@@ -250,9 +253,23 @@ app.add_middleware(
 
 @app.middleware("http")
 async def handle_trailing_slashes(request: Request, call_next):
-    path = request.url.path
-    if path != "/" and path.endswith("/"):
-        new_path = path.rstrip("/")
+    # The fully decoded path. (request.url.path is partly re-encoded: "?" and
+    # "#" are escaped, "%" is not, so it can be neither used nor quoted as is.)
+    path = request.scope["path"]
+    root = request.scope.get("root_path", "")
+    if root and (path == root or path.startswith(root + "/")):
+        path = path[len(root):] or "/"  # some servers (uvicorn --root-path) include it
+    if path != "/" and path.endswith("/") and not any(seg in (".", "..") for seg in path.split("/")):
+        # Collapse leading slashes too: "//evil.example/" must not become the
+        # protocol-relative redirect target "//evil.example". Paths with dot
+        # segments are not redirected (they get a 404 from routing), so a
+        # redirect can never leave the application's root path.
+        #
+        # The path is *decoded*; percent-encode it again before it goes into
+        # the Location URL. Otherwise a request for "/%252e%252e/" (decoded:
+        # "/%2e%2e/") would redirect to ".../%2e%2e", which browsers treat as
+        # "..", and decoded "?", "#" or "%" would turn path data into URL syntax.
+        new_path = urllib.parse.quote("/" + path.strip("/"), safe="/")
         root_path = request.scope.get("root_path", "")
         full_path = f"{root_path}{new_path}" if root_path else new_path
         query_string = request.url.query
@@ -261,13 +278,62 @@ async def handle_trailing_slashes(request: Request, call_next):
     return await call_next(request)
 
 
+_PREFIX_SEGMENT = re.compile(r"[A-Za-z0-9._~-]+")
+
+
+def _valid_forwarded_prefix(value: str) -> Optional[str]:
+    """Return a safe root_path from an X-Forwarded-Prefix value, or None.
+
+    The value ends up in redirect Location headers and in every link on the HTML
+    pages, so only a plain absolute path is accepted: "/" followed by one or more
+    segments of RFC 3986 unreserved characters, with at most one trailing slash
+    (removed). Everything else is rejected, including "//host", schemes, empty,
+    "." or ".." segments, backslashes and percent-encoding. If
+    FORWARDED_PREFIX_ALLOWED is non-empty, the value must also be one of those.
+    """
+    prefix = value[:-1] if value.endswith("/") else value
+    if not prefix.startswith("/"):
+        return None
+    segments = prefix[1:].split("/")
+    if any(seg in (".", "..") or not _PREFIX_SEGMENT.fullmatch(seg) for seg in segments):
+        return None
+    allowed = settings.FORWARDED_PREFIX_ALLOWED
+    if allowed and prefix not in allowed:
+        return None
+    return prefix
+
+
+class _RateLimitedWarning:
+    """Log a warning at most once per interval, with a count of suppressed ones."""
+
+    def __init__(self, interval: float = 60.0):
+        self.interval = interval
+        self._last = float("-inf")
+        self._suppressed = 0
+
+    def __call__(self, msg: str, *args: Any) -> None:
+        now = time.monotonic()
+        if now - self._last < self.interval:
+            self._suppressed += 1
+            return
+        if self._suppressed:
+            msg += f" ({self._suppressed} similar messages suppressed)"
+        self._last, self._suppressed = now, 0
+        logger.warning(msg, *args)
+
+
+_warn_bad_prefix = _RateLimitedWarning()
+
+
 @app.middleware("http")
 async def add_root_path_from_forwarded_prefix(request: Request, call_next):
-    prefix = request.headers.get("x-forwarded-prefix")
-    if prefix:
-        prefix = prefix.rstrip("/")
+    header = request.headers.get("x-forwarded-prefix")
+    if header and settings.TRUST_X_FORWARDED_PREFIX:
+        prefix = _valid_forwarded_prefix(header)
         if prefix:
             request.scope["root_path"] = prefix
+        else:
+            _warn_bad_prefix("Ignoring invalid or non-allowed X-Forwarded-Prefix: %r", header[:200])
     return await call_next(request)
 
 
@@ -341,12 +407,6 @@ templates.env.filters["compact_number"] = _format_compact_number
 async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Handle Starlette HTTPException (includes 404 from routing)."""
     if exc.status_code == 404:
-        path = request.url.path
-        if path.endswith("/") and path != "/":
-            new_path = path.rstrip("/")
-            new_url = request.url.replace(path=new_path)
-            return RedirectResponse(url=str(new_url), status_code=307)
-
         return JSONResponse(
             status_code=404,
             content={
