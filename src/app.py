@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from datetime import date
 from decimal import Decimal
@@ -129,8 +130,71 @@ def with_jsonld_context(data: Any) -> Any:
 # Global RDF graph - loaded at module level before gunicorn forks workers
 graph: Optional[Graph] = None
 
+class BoundedResultCache:
+    """LRU cache for SPARQL results, bounded by entry count and by total result size.
+
+    Size is measured in result rows (SELECT) or triples (CONSTRUCT/DESCRIBE).
+    Row and triple counts are only an approximate indicator of memory use (a
+    row can hold arbitrarily long literals): these limits constrain the number
+    and cardinality of retained results, not memory in bytes. Results larger
+    than ``max_entry_rows`` are never cached; ``max_entries == 0`` disables
+    the cache.
+
+    Not thread-safe: use it from one thread (the event loop) only.
+    """
+
+    def __init__(self, max_entries: int, max_total_rows: int, max_entry_rows: int):
+        self.max_entries = max_entries
+        self.max_total_rows = max_total_rows
+        self.max_entry_rows = max_entry_rows
+        self._data: OrderedDict[str, tuple[Any, int]] = OrderedDict()
+        self._total_rows = 0
+
+    def get(self, key: str) -> Any:
+        item = self._data.get(key)
+        if item is None:
+            return None
+        self._data.move_to_end(key)
+        return item[0]
+
+    def put(self, key: str, value: Any, rows: int) -> None:
+        if rows > min(self.max_entry_rows, self.max_total_rows) or self.max_entries <= 0:
+            return
+        if key in self._data:
+            self._total_rows -= self._data.pop(key)[1]
+        self._data[key] = (value, rows)
+        self._total_rows += rows
+        while self._data and (len(self._data) > self.max_entries or self._total_rows > self.max_total_rows):
+            _, (_, evicted_rows) = self._data.popitem(last=False)
+            self._total_rows -= evicted_rows
+
+    def clear(self) -> None:
+        self._data.clear()
+        self._total_rows = 0
+
+    @property
+    def total_rows(self) -> int:
+        return self._total_rows
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+
+def _result_rows(results: Any) -> int:
+    """Size of a SPARQL result: rows for SELECT, 1 for ASK, triples for CONSTRUCT/DESCRIBE."""
+    if results.type == "SELECT":
+        return len(results.bindings)
+    if results.type == "ASK":
+        return 1
+    return len(results.graph)
+
+
 # Cache for SPARQL queries against the read-only RDF graph
-QUERY_CACHE: dict[str, Any] = {}
+QUERY_CACHE = BoundedResultCache(
+    max_entries=settings.SPARQL_CACHE_MAX_ENTRIES,
+    max_total_rows=settings.SPARQL_CACHE_MAX_TOTAL_ROWS,
+    max_entry_rows=settings.SPARQL_CACHE_MAX_ENTRY_ROWS,
+)
 
 _ext_to_format = {
     ".ttl": "turtle",
@@ -649,8 +713,9 @@ def run_sparql_query(query: str) -> Any:
     # share a cache entry and the second would get the first one's answer.
     query_key = f"{id(g)}:{hashlib.sha256(query.encode()).hexdigest()}"
 
-    if query_key in QUERY_CACHE:
-        return QUERY_CACHE[query_key]
+    cached = QUERY_CACHE.get(query_key)
+    if cached is not None:
+        return cached
 
     try:
         init_ns = dict(g.namespaces())
@@ -670,10 +735,9 @@ def run_sparql_query(query: str) -> Any:
             _ = results.graph
         duration = time.time() - start_time
 
-        if len(QUERY_CACHE) < 1024:
-            QUERY_CACHE[query_key] = results
+        QUERY_CACHE.put(query_key, results, _result_rows(results))
         if duration > 0.5:
-            logger.info(f"SPARQL query took {duration:.2f}s, cached (hash: {query_key[:16]}...)")
+            logger.info(f"SPARQL query took {duration:.2f}s (hash: {query_key[:16]}...)")
 
         return results
     except Exception as e:
