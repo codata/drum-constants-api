@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **Exact SPARQL Cache Key (`src/app.py`)**: Key `QUERY_CACHE` on the exact query string instead of whitespace-collapsed text, preventing string literals and `#` line comments from colliding across distinct queries.
+- **Bounded SPARQL LRU Cache (`src/app.py`, `src/config.py`)**: Replaced the unbounded cache dict with `BoundedResultCache` (LRU with configurable `SPARQL_CACHE_MAX_ENTRIES=512`, `SPARQL_CACHE_MAX_TOTAL_ROWS=100000`, `SPARQL_CACHE_MAX_ENTRY_ROWS=10000`).
+- **Isolated, Resource-Limited SPARQL Execution (`src/app.py`, `src/config.py`, `docs/SPARQL_LIMITS.md`)**: Run client-supplied `/sparql` queries in a separate forked child process on Linux (`PR_SET_PDEATHSIG`, closed inherited FDs, `RLIMIT_AS` memory cap, 10 s end-to-end deadline, 100k row / 32 MiB response caps, bounded concurrency/wait queue, no client caching, and `Retry-After` header preservation). Fails closed with 503 on non-Linux unless `SPARQL_ALLOW_UNISOLATED=true` is explicitly set for local development.
+- **`X-Forwarded-Prefix` Validation & Open-Redirect Closure (`src/app.py`, `src/config.py`, `docs/SUBPATH_HOSTING.md`)**: Validate `X-Forwarded-Prefix` as a plain absolute path (with optional `FORWARDED_PREFIX_ALLOWED` allowlist and `TRUST_X_FORWARDED_PREFIX` toggle), disable Starlette's `Host`-header `redirect_slashes`, block dot-segment redirects, re-encode decoded paths, and read raw ASGI `query_string` so `%3F` in paths cannot leak into redirect query strings.
+- **Strict SPARQL Input Limits & Decoding (`src/app.py`, `src/config.py`, `docs/SPARQL_LIMITS.md`)**: Enforce `SPARQL_MAX_REQUEST_BYTES` (1 MiB, including chunked bodies) and `SPARQL_MAX_QUERY_LENGTH` (100k chars), reject invalid UTF-8, malformed percent-escapes, lone JSON surrogates, deep JSON nesting, empty queries, and duplicate `query` parameters on both GET and POST.
+
 ## [0.5.0] - 2026-11-21
 
 ### Added

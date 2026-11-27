@@ -272,7 +272,7 @@ async def handle_trailing_slashes(request: Request, call_next):
         new_path = urllib.parse.quote("/" + path.strip("/"), safe="/")
         root_path = request.scope.get("root_path", "")
         full_path = f"{root_path}{new_path}" if root_path else new_path
-        query_string = request.url.query
+        query_string = request.scope.get("query_string", b"").decode("latin-1")
         redirect_url = f"{full_path}?{query_string}" if query_string else full_path
         return RedirectResponse(url=redirect_url, status_code=307)
     return await call_next(request)

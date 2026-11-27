@@ -1,7 +1,14 @@
 """Regression tests for the SPARQL endpoint and request-handling security fixes."""
 
+import sys
+
 from fastapi.testclient import TestClient
 import pytest
+
+requires_linux = pytest.mark.skipif(
+    not sys.platform.startswith("linux"),
+    reason="Requires Linux process isolation (fork + PR_SET_PDEATHSIG + /proc + RLIMIT_AS)",
+)
 
 from src.app import app
 
@@ -186,7 +193,8 @@ def test_public_queries_never_touch_the_cache(client, monkeypatch):
     from src.app import QUERY_CACHE
 
     QUERY_CACHE.clear()
-    for allow_unisolated, isolated in [(False, True), (True, False)]:
+    cases = [(False, True), (True, False)] if sys.platform.startswith("linux") else [(True, False)]
+    for allow_unisolated, isolated in cases:
         monkeypatch.setattr(settings, "SPARQL_ALLOW_UNISOLATED", allow_unisolated)
         monkeypatch.setattr(app_module, "_sparql_isolation_available", lambda v=isolated: v)
         for i in range(3):
@@ -204,6 +212,7 @@ def test_public_queries_never_touch_the_cache(client, monkeypatch):
     QUERY_CACHE.clear()
 
 
+@requires_linux
 def test_deadline_kills_a_slow_child(client, monkeypatch):
     monkeypatch.setattr(settings, "SPARQL_TIMEOUT_SECONDS", 1.0)
     monkeypatch.setattr(app_module, "_execute_and_serialize", _fake_execute(lambda: time.sleep(60)))
@@ -214,6 +223,7 @@ def test_deadline_kills_a_slow_child(client, monkeypatch):
     assert _no_children_left()
 
 
+@requires_linux
 def test_deadline_covers_a_stalled_result_transfer(client, monkeypatch):
     """A child that starts writing and then stalls is still killed at the deadline."""
     monkeypatch.setattr(settings, "SPARQL_TIMEOUT_SECONDS", 1.0)
@@ -231,6 +241,7 @@ def test_deadline_covers_a_stalled_result_transfer(client, monkeypatch):
     assert _no_children_left()
 
 
+@requires_linux
 def test_real_slow_query_is_killed_and_health_stays_responsive(client, monkeypatch):
     monkeypatch.setattr(settings, "SPARQL_TIMEOUT_SECONDS", 2.0)
     health: dict = {}
@@ -250,6 +261,7 @@ def test_real_slow_query_is_killed_and_health_stays_responsive(client, monkeypat
     assert _no_children_left()
 
 
+@requires_linux
 def test_memory_limit_stops_a_query(client, monkeypatch):
     monkeypatch.setattr(settings, "SPARQL_MAX_QUERY_MEMORY_MB", 128)
 
@@ -264,6 +276,7 @@ def test_memory_limit_stops_a_query(client, monkeypatch):
     assert _no_children_left()
 
 
+@requires_linux
 def test_memory_limit_stops_a_real_query(client, monkeypatch):
     """ORDER BY over a Cartesian product grew a child to ~940 MB in 10 s before the limit."""
     monkeypatch.setattr(settings, "SPARQL_MAX_QUERY_MEMORY_MB", 150)
@@ -277,6 +290,7 @@ def test_memory_limit_stops_a_real_query(client, monkeypatch):
     assert r.status_code == 503 and "memory" in r.json()["detail"]
 
 
+@requires_linux
 def test_child_killed_by_signal_is_reported_as_resource_failure(client, monkeypatch):
     monkeypatch.setattr(
         app_module, "_execute_and_serialize", _fake_execute(lambda: os.kill(os.getpid(), signal.SIGKILL))
@@ -286,6 +300,7 @@ def test_child_killed_by_signal_is_reported_as_resource_failure(client, monkeypa
     assert _no_children_left()
 
 
+@requires_linux
 def test_unexpected_child_failures_are_server_errors(client, monkeypatch):
     def boom():
         raise ValueError("secret internal detail")
@@ -300,6 +315,7 @@ def test_unexpected_child_failures_are_server_errors(client, monkeypatch):
     assert _no_children_left()
 
 
+@requires_linux
 def test_child_closes_inherited_descriptors(client, monkeypatch):
     def list_fds():
         targets = []
@@ -318,6 +334,7 @@ def test_child_closes_inherited_descriptors(client, monkeypatch):
     assert len(targets) <= 5  # stdin/stdout/stderr, the result pipe, the /proc listing itself
 
 
+@requires_linux
 def test_response_byte_limit_in_child(client, monkeypatch):
     monkeypatch.setattr(settings, "SPARQL_MAX_RESPONSE_BYTES", 2048)
     r = client.get(
@@ -329,6 +346,7 @@ def test_response_byte_limit_in_child(client, monkeypatch):
 
 
 @pytest.mark.parametrize("size,status", [(4096, 200), (4097, 400), (10_000_000, 400)])
+@requires_linux
 def test_response_byte_limit_enforced_exactly_by_parent(client, monkeypatch, size, status):
     """Even if the child does not check, the parent refuses anything above the limit."""
     monkeypatch.setattr(settings, "SPARQL_MAX_RESPONSE_BYTES", 4096)
@@ -353,6 +371,7 @@ def test_response_byte_limit_enforced_exactly_by_parent(client, monkeypatch, siz
         b"x" * 10000,  # no header line
     ],
 )
+@requires_linux
 def test_malformed_child_output_is_a_server_error(client, monkeypatch, payload):
     def lying_child(write_fd, query, accept, parent_pid):
         os.write(write_fd, payload)
@@ -440,6 +459,7 @@ def test_fails_closed_without_isolation(client, monkeypatch):
     assert client.get("/sparql", params={"query": SIMPLE_QUERY}).status_code == 200
 
 
+@requires_linux
 def test_fork_failure_is_503_and_leaks_nothing(client, monkeypatch):
     def no_fork():
         raise OSError(errno.EAGAIN, "Resource temporarily unavailable")
@@ -487,6 +507,7 @@ def _canonical(body: bytes, media_type: str):
 
 
 @pytest.mark.parametrize("query,accept", EQUIVALENCE_CASES)
+@requires_linux
 def test_isolated_and_inprocess_results_are_identical(client, monkeypatch, query, accept):
     """Same RDF terms, datatypes and lexical forms (incl. full-precision values) in both modes."""
     isolated = client.get("/sparql", params={"query": query}, headers={"Accept": accept})
@@ -561,6 +582,7 @@ def test_cancelled_request_keeps_its_slot_until_execution_ends(monkeypatch):
     asyncio.run(scenario())
 
 
+@requires_linux
 def test_child_that_lingers_after_closing_its_pipe_is_bounded(client, monkeypatch):
     """EOF is not exit: a child that closes its pipe and stays alive is killed at the
     deadline, and its result is not used (strict deadline policy)."""
@@ -580,6 +602,7 @@ def test_child_that_lingers_after_closing_its_pipe_is_bounded(client, monkeypatc
     assert _no_children_left()
 
 
+@requires_linux
 def test_child_that_survives_sigkill_does_not_block_the_worker(monkeypatch):
     """If a child cannot be reaped within the grace period it is recorded and reaped later."""
     pid = os.fork()
@@ -603,6 +626,7 @@ def test_child_that_survives_sigkill_does_not_block_the_worker(monkeypatch):
     assert _no_children_left()
 
 
+@requires_linux
 def test_query_refused_when_resource_limits_cannot_be_set_up(client, monkeypatch):
     def no_statm(extra_mb):
         raise OSError(2, "No such file or directory: '/proc/self/statm'")
@@ -626,6 +650,7 @@ def _in_forked_child(fn) -> int:
     return os.waitstatus_to_exitcode(status)
 
 
+@requires_linux
 def test_memory_limit_never_relaxes_an_inherited_soft_limit():
     import resource
 
@@ -643,6 +668,7 @@ def test_memory_limit_never_relaxes_an_inherited_soft_limit():
     assert _in_forked_child(check) == 0
 
 
+@requires_linux
 def test_memory_limit_is_relative_to_inherited_size():
     import resource
 
@@ -664,6 +690,7 @@ def _process_gone(pid: int) -> bool:
         return True
 
 
+@requires_linux
 def test_query_child_dies_with_its_parent():
     """A worker killed by its process manager must not leave query processes behind."""
     r, w = os.pipe()
@@ -699,6 +726,8 @@ def test_query_child_dies_with_its_parent():
 @pytest.mark.parametrize("where", ["prepare", "evaluate"])
 @pytest.mark.parametrize("isolated", [True, False])
 def test_unexpected_engine_exceptions_are_500_without_details(client, monkeypatch, where, isolated):
+    if isolated and not sys.platform.startswith("linux"):
+        pytest.skip("Requires Linux process isolation")
     def boom(*args, **kwargs):
         raise TypeError("secret internal detail")
 
@@ -731,6 +760,7 @@ def test_mistakes_in_queries_are_400(client, query, fragment):
     assert fragment.lower() in r.json()["detail"].lower()
 
 
+@requires_linux
 def test_child_never_returns_into_server_code(client, monkeypatch):
     """If the child's main function raises instead of exiting, the child must still exit."""
     monkeypatch.setattr(settings, "SPARQL_TIMEOUT_SECONDS", 5.0)
@@ -746,6 +776,7 @@ def test_child_never_returns_into_server_code(client, monkeypatch):
     assert _no_children_left()
 
 
+@requires_linux
 def test_isolated_execution_preserves_every_value_string_exactly(client):
     """Every codata:value / codata:uncertainty literal comes back byte-for-byte, with its datatype."""
     g = app_module._require_graph()
@@ -780,6 +811,7 @@ def test_isolated_execution_preserves_every_value_string_exactly(client):
         ("sigkill", 500, "server error"),  # reported success, then died from a signal we did not send
     ],
 )
+@requires_linux
 def test_result_is_used_only_if_child_exits_cleanly(client, monkeypatch, after_report, status, fragment):
     def child(write_fd, query, accept, parent_pid):
         os.write(write_fd, b'{"kind": "ok", "media_type": "text/plain", "length": 2}\nok')
@@ -794,6 +826,7 @@ def test_result_is_used_only_if_child_exits_cleanly(client, monkeypatch, after_r
     assert _no_children_left()
 
 
+@requires_linux
 def test_queries_refused_while_a_process_could_not_be_reaped(client):
     stuck = os.fork()
     if stuck == 0:
@@ -817,6 +850,7 @@ def test_queries_refused_while_a_process_could_not_be_reaped(client):
     ["p" * 100, "p" * 5000, "p" * 50_000, "é" * 3000, "a" + "é中" * 3000],
     ids=["short", "5k", "50k", "escaped-6x", "mixed-escaped"],
 )
+@requires_linux
 def test_long_query_error_messages_stay_400(client, prefix):
     """Error messages quote the query; they must fit the IPC header and stay client errors."""
     r = client.post(
@@ -861,6 +895,7 @@ def _reporting_child(write_fd, query, accept, parent_pid):
     os._exit(0)
 
 
+@requires_linux
 def test_forced_cleanup_means_timeout_even_with_a_clean_exit_status(client, monkeypatch):
     """The child exits normally just after the deadline, before SIGKILL lands: still a timeout."""
     real_finish = app_module._finish_child
@@ -877,6 +912,7 @@ def test_forced_cleanup_means_timeout_even_with_a_clean_exit_status(client, monk
     assert _no_children_left()
 
 
+@requires_linux
 def test_unknown_exit_status_is_not_a_clean_exit(client, monkeypatch):
     """If the child was reaped elsewhere (ChildProcessError), its result is not used."""
     real_waitpid = os.waitpid
