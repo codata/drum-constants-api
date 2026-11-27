@@ -20,7 +20,7 @@ def test_index_json_and_html(client):
     response = client.get("/")
     assert response.status_code == 200
     assert response.json()["message"] == "Welcome to CODATA DRUM Physical Fundamental Constants API!"
-    assert response.json()["version"] == "0.5.0"
+    assert response.json()["version"] == "0.5.1"
 
     html_resp = client.get("/", headers={"Accept": "text/html"})
     assert html_resp.status_code == 200
@@ -284,12 +284,12 @@ def test_static_files_included_in_pyproject_build():
 
 
 def test_api_version(client):
-    """Verify package and OpenAPI version is 0.5.0."""
+    """Verify package and OpenAPI version is 0.5.1."""
     from src import __version__
 
-    assert __version__ == "0.5.0"
+    assert __version__ == "0.5.1"
     openapi = client.get("/openapi.json").json()
-    assert openapi["info"]["version"] == "0.5.0"
+    assert openapi["info"]["version"] == "0.5.1"
 
 
 def test_health_and_ontology_endpoints(client):
@@ -298,7 +298,7 @@ def test_health_and_ontology_endpoints(client):
     assert h_resp.status_code == 200
     h_data = h_resp.json()
     assert h_data["status"] == "healthy"
-    assert h_data["apiVersion"] == "0.5.0"
+    assert h_data["apiVersion"] == "0.5.1"
     assert h_data["constantsTotal"] == 359
     assert h_data["constantsActive"] == 355
     assert h_data["computedUpgradesTotal"] == 124
